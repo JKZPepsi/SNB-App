@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar { height: 8px; width: 8px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: #051611; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #13382d; border-radius: 4px; }
+}
+
+@keyframes snb-luxury-reveal {
+    0% { opacity: 0; filter: blur(2px); transform: translateY(4px); }
+    100% { opacity: 1; filter: blur(0px); transform: translateY(0); }
+}
+@keyframes snb-breath {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.8; }
+}
+@keyframes snb-slide {
+    0% { transform: translateX(-101%); }
+    100% { transform: translateX(101%); }
+}
