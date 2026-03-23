@@ -1228,7 +1228,7 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
 export function SNBInternationalsBracket({ tournament, allTournaments = [], players, onBack, db, appId, onNavigate }) {
     const [viewMode, setViewMode] = useState(tournament.status === 'completed' ? 'info' : 'bracket');
     const [resolvingMatch, setResolvingMatch] = useState(null);
-    const [searchParams, setSearchParams] = useSearchParams(); // <-- NEW ROUTER HOOK
+    const [searchParams, setSearchParams] = useSearchParams(); // <-- ROUTER HOOK 
     
     const [showSettings, setShowSettings] = useState(false);
     const [editName, setEditName] = useState('');
