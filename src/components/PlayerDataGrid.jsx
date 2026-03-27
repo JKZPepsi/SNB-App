@@ -98,7 +98,12 @@ export function PlayerDataGrid({ players, tournaments, onSelectPlayer, onNavigat
                     </thead>
                     <tbody className="divide-y divide-white/[0.05]">
                         {active.map((player) => {
-                            const recent = player.recentTournaments?.[0];
+                            // PRIORITIZE THE NEW IMAGES ARRAY OVER THE DEAD IMAGEURL
+                            const imgUrl = (player.images && player.images.length > 0 && player.images[0]) ? player.images[0] : player.imageUrl;
+                            
+                            const scoringTournaments = player.recentTournaments?.filter(t => t.tier !== 'nations_league') || [];
+                            const recent = scoringTournaments[0];
+                            
                             let recentDisplay = <span className="text-white/20">-</span>;
                             
                             if (recent) {
@@ -117,7 +122,7 @@ export function PlayerDataGrid({ players, tournaments, onSelectPlayer, onNavigat
                             }
 
                             const trueGained = (recent?.points || 0) + (player.bonusPoints || 0);
-                            const trueDropped = trueGained - (player.diff || 0);
+                            const rawDropped = Math.max(0, trueGained - (player.diff || 0));
 
                             return (
                                 <tr key={player.id} onClick={() => onSelectPlayer(player.id)} className="hover:bg-white/5 transition-all duration-200 cursor-pointer group">
@@ -138,7 +143,8 @@ export function PlayerDataGrid({ players, tournaments, onSelectPlayer, onNavigat
                                     <td className="py-3 px-2 text-left">
                                         <div className="flex items-center gap-3">
                                             <div className="w-10 h-10 rounded-full overflow-hidden bg-black/40 shrink-0 shadow-[0_4px_10px_rgba(0,0,0,0.5)] group-hover:shadow-[0_4px_15px_rgba(255,255,255,0.2)] transition-all">
-                                                <PlayerMedia url={player.imageUrl || (player.images ? player.images[0] : '')} className="w-full h-full object-cover" />
+                                                {/* INJECTED URL FIX HERE */}
+                                                <PlayerMedia url={imgUrl} className="w-full h-full object-cover" />
                                             </div>
                                             <div className="flex flex-col justify-center min-w-0">
                                                 <div className="font-black text-base text-white/90 truncate group-hover:text-gold-400 transition-colors tracking-tight">
@@ -170,7 +176,7 @@ export function PlayerDataGrid({ players, tournaments, onSelectPlayer, onNavigat
                                                 </div>
                                                 <div className="flex justify-between items-center text-rose-400 font-bold border-b border-white/10 pb-1.5 mb-1.5">
                                                     <span className="text-xs uppercase tracking-widest text-rose-400/70">Dropped</span>
-                                                    <span>-{trueDropped}</span>
+                                                    <span>-{rawDropped}</span>
                                                 </div>
                                                 <div className="flex justify-between items-center text-white font-black">
                                                     <span className="text-xs uppercase tracking-widest text-white/50">Net</span>
@@ -211,51 +217,57 @@ export function PlayerDataGrid({ players, tournaments, onSelectPlayer, onNavigat
                                         </div>
                                     </td>
                                 </tr>
-                                {retired.map((player) => (
-                                    <tr key={player.id} onClick={() => onSelectPlayer(player.id)} className="hover:bg-white/[0.03] transition-all duration-300 cursor-pointer group opacity-50 grayscale hover:grayscale-0 hover:opacity-100">
-                                        <td className="py-3 px-2 text-center text-3xl font-medium text-white/30 tabular-nums">-</td>
-                                        
-                                        {rankKey === 'nationalRank' && (
-                                            <td className="py-3 px-2 text-center text-3xl font-medium text-white/30 tabular-nums">-</td>
-                                        )}
-                                        
-                                        <td className="py-3 px-2 text-left">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full overflow-hidden bg-black shrink-0 shadow-sm relative">
-                                                    <PlayerMedia url={player.imageUrl || (player.images ? player.images[0] : '')} className="w-full h-full object-cover" />
-                                                </div>
-                                                <div className="font-bold text-base text-white/70 truncate flex items-center gap-2 group-hover:text-white transition-colors">
-                                                    {player.name}
-                                                    <span className="text-[8px] bg-rose-500/20 text-rose-300 px-1.5 py-0.5 rounded uppercase tracking-widest border border-rose-500/30">Ret</span>
-                                                </div>
-                                            </div>
-                                        </td>
+                                {retired.map((player) => {
+                                    // PRIORITIZE THE NEW IMAGES ARRAY FOR RETIRED PLAYERS TOO
+                                    const imgUrl = (player.images && player.images.length > 0 && player.images[0]) ? player.images[0] : player.imageUrl;
 
-                                        {showNationality && (
-                                            <td className="py-3 px-2 text-center">
-                                                <div className="flex flex-col items-center justify-center">
-                                                    <span className="text-2xl drop-shadow-sm leading-none">{getFlag(player.nationality)}</span>
-                                                    <span className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-1">{player.nationality}</span>
+                                    return (
+                                        <tr key={player.id} onClick={() => onSelectPlayer(player.id)} className="hover:bg-white/[0.03] transition-all duration-300 cursor-pointer group opacity-50 grayscale hover:grayscale-0 hover:opacity-100">
+                                            <td className="py-3 px-2 text-center text-3xl font-medium text-white/30 tabular-nums">-</td>
+                                            
+                                            {rankKey === 'nationalRank' && (
+                                                <td className="py-3 px-2 text-center text-3xl font-medium text-white/30 tabular-nums">-</td>
+                                            )}
+                                            
+                                            <td className="py-3 px-2 text-left">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full overflow-hidden bg-black shrink-0 shadow-sm relative">
+                                                        {/* INJECTED URL FIX HERE */}
+                                                        <PlayerMedia url={imgUrl} className="w-full h-full object-cover" />
+                                                    </div>
+                                                    <div className="font-bold text-base text-white/70 truncate flex items-center gap-2 group-hover:text-white transition-colors">
+                                                        {player.name}
+                                                        <span className="text-[8px] bg-rose-500/20 text-rose-300 px-1.5 py-0.5 rounded uppercase tracking-widest border border-rose-500/30">Ret</span>
+                                                    </div>
                                                 </div>
                                             </td>
-                                        )}
-                                        
-                                        <td className="py-3 px-2 text-center">
-                                            <div className="text-[8px] text-white/30 uppercase tracking-widest font-black mb-0.5">Peak Pts</div>
-                                            <span className="text-lg font-medium text-white/50 tabular-nums">{player.peakPoints?.toLocaleString() || '-'}</span>
-                                        </td>
-                                        
-                                        <td className="py-3 px-2 text-center text-white/20">-</td>
-                                        <td className="py-3 px-2 text-center text-white/20">-</td>
-                                        <td className="py-3 px-2 text-center text-white/40 font-medium text-sm tabular-nums">{player.stats?.wins || 0} - {player.stats?.losses || 0}</td>
-                                        <td className="py-3 px-4 text-center">
-                                            <div className="flex flex-col items-center justify-center">
-                                                <span className="text-[8px] text-white/30 uppercase tracking-widest font-black mb-0.5">Peak Rank</span>
-                                                <span className="text-white/50 font-bold text-sm">#{player.peakRank || '-'}</span>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
+
+                                            {showNationality && (
+                                                <td className="py-3 px-2 text-center">
+                                                    <div className="flex flex-col items-center justify-center">
+                                                        <span className="text-2xl drop-shadow-sm leading-none">{getFlag(player.nationality)}</span>
+                                                        <span className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-1">{player.nationality}</span>
+                                                    </div>
+                                                </td>
+                                            )}
+                                            
+                                            <td className="py-3 px-2 text-center">
+                                                <div className="text-[8px] text-white/30 uppercase tracking-widest font-black mb-0.5">Peak Pts</div>
+                                                <span className="text-lg font-medium text-white/50 tabular-nums">{player.peakPoints?.toLocaleString() || '-'}</span>
+                                            </td>
+                                            
+                                            <td className="py-3 px-2 text-center text-white/20">-</td>
+                                            <td className="py-3 px-2 text-center text-white/20">-</td>
+                                            <td className="py-3 px-2 text-center text-white/40 font-medium text-sm tabular-nums">{player.stats?.wins || 0} - {player.stats?.losses || 0}</td>
+                                            <td className="py-3 px-4 text-center">
+                                                <div className="flex flex-col items-center justify-center">
+                                                    <span className="text-[8px] text-white/30 uppercase tracking-widest font-black mb-0.5">Peak Rank</span>
+                                                    <span className="text-white/50 font-bold text-sm">#{player.peakRank || '-'}</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </>
                         )}
                     </tbody>

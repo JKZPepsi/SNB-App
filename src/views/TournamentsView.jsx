@@ -80,18 +80,25 @@ export function ResolveMatchModal({ resolvingMatch, setResolvingMatch, submitRes
 
                         return (
                             <div key={idx} className="flex-1 w-full max-w-[340px] flex flex-col relative z-10">
-                                <div className="w-full aspect-[3/4] rounded-[2rem] overflow-hidden border-[3px] border-white/10 shadow-[0_15px_40px_rgba(0,0,0,0.4)] relative group bg-black/40 flex items-center justify-center mb-5 shrink-0">
+                                {/* FIX: Added "isolate" and removed the absolute z-10 wrapper from the inner content */}
+                                <div className="w-full aspect-[3/4] rounded-[2rem] overflow-hidden border-[3px] border-white/10 shadow-[0_15px_40px_rgba(0,0,0,0.4)] relative group bg-black/40 flex items-center justify-center mb-5 shrink-0 isolate" style={{ WebkitMaskImage: '-webkit-radial-gradient(white, black)' }}>
+                                    
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none -z-10"></div>
+
                                     {imgs[iIdx] ? (
-                                        <PlayerMedia url={imgs[iIdx]} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                                        <PlayerMedia url={imgs[iIdx]} className="w-full h-full object-cover" />
                                     ) : (
-                                        <div className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center"><span className="text-white/40 font-bold text-xl">TBD</span></div>
+                                        <span className="text-white/40 font-bold text-xl relative z-10">TBD</span>
                                     )}
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none"></div>
 
                                     {imgs.length > 1 && (
-                                        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-between px-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={(e) => { e.stopPropagation(); setIIdx(prev => (prev === 0 ? imgs.length-1 : prev-1)); }} className="w-10 h-10 bg-black/40 hover:bg-black/80 border border-white/20 rounded-full flex items-center justify-center text-white backdrop-blur-md shadow-lg transition-all hover:scale-110"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
-                                            <button onClick={(e) => { e.stopPropagation(); setIIdx(prev => (prev === imgs.length-1 ? 0 : prev+1)); }} className="w-10 h-10 bg-black/40 hover:bg-black/80 border border-white/20 rounded-full flex items-center justify-center text-white backdrop-blur-md shadow-lg transition-all hover:scale-110"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+                                        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-between px-4 opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
+                                            <button onClick={(e) => { e.stopPropagation(); setIIdx(prev => (prev === 0 ? imgs.length-1 : prev-1)); }} className="w-10 h-10 bg-black/40 hover:bg-black/80 border border-white/20 rounded-full flex items-center justify-center text-white backdrop-blur-md shadow-lg transition-all hover:scale-110 pointer-events-auto">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                                            </button>
+                                            <button onClick={(e) => { e.stopPropagation(); setIIdx(prev => (prev === imgs.length-1 ? 0 : prev+1)); }} className="w-10 h-10 bg-black/40 hover:bg-black/80 border border-white/20 rounded-full flex items-center justify-center text-white backdrop-blur-md shadow-lg transition-all hover:scale-110 pointer-events-auto">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                            </button>
                                         </div>
                                     )}
                                 </div>
@@ -878,12 +885,21 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
     const IconClose = () => <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>;
 
     const tabs = useMemo(() => {
-        if (drawSize <= 16) return [{ id: 'all', label: 'Full Draw' }];
-        const navTabs = [{ id: 'all', label: 'Full Draw' }];
-        if (drawSize >= 64) navTabs.push({ id: 'q1', label: 'Quarter 1' }, { id: 'q2', label: 'Quarter 2' }, { id: 'q3', label: 'Quarter 3' }, { id: 'q4', label: 'Quarter 4' }, { id: 'final8', label: 'Final 8' });
-        else if (drawSize === 32) navTabs.push({ id: 'top', label: 'Top Half' }, { id: 'bottom', label: 'Bottom Half' }, { id: 'final8', label: 'Final 8' });
-        return navTabs;
-    }, [drawSize]);
+        if (drawSize <= 16) return [{ id: 'all', label: 'Full Draw' }];
+        const navTabs = [{ id: 'all', label: 'Full Draw' }];
+        if (drawSize === 128) {
+            navTabs.push(
+                { id: 's1', label: 'Sec 1' }, { id: 's2', label: 'Sec 2' },
+                { id: 's3', label: 'Sec 3' }, { id: 's4', label: 'Sec 4' },
+                { id: 's5', label: 'Sec 5' }, { id: 's6', label: 'Sec 6' },
+                { id: 's7', label: 'Sec 7' }, { id: 's8', label: 'Sec 8' },
+                { id: 'final16', label: 'Final 16' }
+            );
+        }
+        else if (drawSize === 64) navTabs.push({ id: 'q1', label: 'Quarter 1' }, { id: 'q2', label: 'Quarter 2' }, { id: 'q3', label: 'Quarter 3' }, { id: 'q4', label: 'Quarter 4' }, { id: 'final8', label: 'Final 8' });
+        else if (drawSize === 32) navTabs.push({ id: 'top', label: 'Top Half' }, { id: 'bottom', label: 'Bottom Half' }, { id: 'final8', label: 'Final 8' });
+        return navTabs;
+    }, [drawSize]);
 
     useEffect(() => { if (!tabs.find(t => t.id === activeTab)) setActiveTab(tabs[0].id); }, [tabs, activeTab]);
 
@@ -895,8 +911,22 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
     const shouldShowMatch = (tab, r, m, len) => {
         if (tab === 'all') return true;
         if (tab === 'final8') return r >= totalRounds - 3;
-        if (tab.startsWith('q')) { if (r >= totalRounds - 2) return false; const qMap = { 'q1': 0, 'q2': 1, 'q3': 2, 'q4': 3 }; return m >= qMap[tab] * (len / 4) && m < (qMap[tab] + 1) * (len / 4); }
-        if (tab === 'top' || tab === 'bottom') { if (r >= totalRounds - 1) return false; const h = tab === 'top' ? 0 : 1; return m >= h * (len / 2) && m < (h + 1) * (len / 2); }
+        if (tab === 'final16') return r >= totalRounds - 4; // R16, QF, SF, F
+        if (tab.startsWith('q')) {
+            if (r >= totalRounds - 2) return false;
+            const qMap = { 'q1': 0, 'q2': 1, 'q3': 2, 'q4': 3 };
+            return m >= qMap[tab] * (len / 4) && m < (qMap[tab] + 1) * (len / 4);
+        }
+        if (tab.startsWith('s')) {
+            if (r >= totalRounds - 3) return false; // Hide R16+
+            const sMap = { 's1': 0, 's2': 1, 's3': 2, 's4': 3, 's5': 4, 's6': 5, 's7': 6, 's8': 7 };
+            return m >= sMap[tab] * (len / 8) && m < (sMap[tab] + 1) * (len / 8);
+        }
+        if (tab === 'top' || tab === 'bottom') {
+            if (r >= totalRounds - 1) return false;
+            const h = tab === 'top' ? 0 : 1;
+            return m >= h * (len / 2) && m < (h + 1) * (len / 2);
+        }
         return true;
     };
 
@@ -1177,6 +1207,7 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
                                     const hasNextRoundVisible = (() => {
                                         if (rIdx === totalRounds - 1) return false; 
                                         if (activeTab.startsWith('q') && rIdx === totalRounds - 3) return false; 
+                                        if (activeTab.startsWith('s') && rIdx === totalRounds - 4) return false; // Cut lines after Sec 1-8
                                         if ((activeTab === 'top' || activeTab === 'bottom') && rIdx === totalRounds - 2) return false; 
                                         return true;
                                     })();
@@ -1187,7 +1218,7 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
                                                 if (!shouldShowMatch(activeTab, rIdx, mIdx, round.length)) return null;
                                                 if (!match) return null;
                                                 const isReady = match.p1 && match.p2 && !match.winner && tournament.status !== 'completed' && match.type !== 'bye';
-                                                const isFirstVisibleRoundInTab = (activeTab === 'top' || activeTab === 'bottom' || activeTab === 'final16' || activeTab === 'final8' || activeTab.startsWith('q')) 
+                                                const isFirstVisibleRoundInTab = (activeTab === 'top' || activeTab === 'bottom' || activeTab === 'final16' || activeTab === 'final8' || activeTab.startsWith('q') || activeTab.startsWith('s')) 
                                                     ? !shouldShowMatch(activeTab, rIdx - 1, mIdx * 2, round.length * 2) : rIdx === 0;
 
                                                 return (
@@ -1740,15 +1771,17 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
     const [showSettings, setShowSettings] = useState(false);
     const [editName, setEditName] = useState('');
     const [editLocation, setEditLocation] = useState('');
-    const [editCountry, setEditCountry] = useState('');
-    const [editDesc, setEditDesc] = useState('');
-    const [showDelete, setShowDelete] = useState(false);
+    const [editCountry, setEditCountry] = useState('');
+    const [editDesc, setEditDesc] = useState('');
+    const [showDelete, setShowDelete] = useState(false);
+    const [expandedDesc, setExpandedDesc] = useState(false);
+    const [showAllNations, setShowAllNations] = useState(false);
 
-    useEffect(() => {
-        if (tournament && showSettings) {
-            setEditName(tournament.name || ''); setEditLocation(tournament.location || ''); setEditCountry(tournament.hostCountry || ''); setEditDesc(tournament.description || ''); setShowDelete(false);
-        }
-    }, [tournament, showSettings]);
+    useEffect(() => {
+        if (tournament && showSettings) {
+            setEditName(tournament.name || ''); setEditLocation(tournament.location || ''); setEditCountry(tournament.hostCountry || ''); setEditDesc(tournament.description || ''); setShowDelete(false);
+        }
+    }, [tournament, showSettings]);
 
     let teams = []; try { teams = typeof tournament.teams === 'string' ? JSON.parse(tournament.teams) : (tournament.teams || []); } catch(e){}
     let groupMatches = []; try { groupMatches = typeof tournament.groupMatches === 'string' ? JSON.parse(tournament.groupMatches) : (tournament.groupMatches || []); } catch(e){}
@@ -1757,7 +1790,6 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
     const getPlayer = (id) => players.find(p => p.id === id) || { name: 'TBD', rank: '-', nationality: 'UNK' };
     const getTeam = (id) => teams.find(t => t.id === id) || { name: 'TBD', flags: ['UNK'], players: [] };
 
-    // NEW: Accepts a custom matches array to prevent stale state, and adds Head-to-Head tiebreakers
     const calcNationStandings = (groupId, customMatches = groupMatches) => {
         const scores = {};
         const gTeams = teams.filter(t => tournament.groups[groupId].includes(t.id));
@@ -1777,11 +1809,8 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
         });
 
         return Object.values(scores).sort((a,b) => {
-            // Tiebreaker 1: Overall Tie Wins
             if (a.wins !== b.wins) return b.wins - a.wins;
-            // Tiebreaker 2: Individual Match Wins
             if (a.matchWins !== b.matchWins) return b.matchWins - a.matchWins;
-            // Tiebreaker 3: Head-to-Head Result
             const h2h = customMatches.find(m => m && m.winner && ((m.t1.id === a.id && m.t2.id === b.id) || (m.t1.id === b.id && m.t2.id === a.id)));
             if (h2h && h2h.winner) {
                 return h2h.winner === a.id ? -1 : 1;
@@ -1812,17 +1841,17 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
             });
         }
         
-        if (foundTie && !foundTie.winner) {
+        if (foundTie) {
             setResolvingTie({ matchType: mType, matchIndex: mIndex, roundIndex: rIndex, ...foundTie });
             setLocalMatches(JSON.parse(JSON.stringify(foundTie.matches)));
-            // SCROLL JUMP BUG REMOVED: No more window.scrollTo() here!
         } else {
             setSearchParams({}); 
         }
+
     }, [urlTieId, tournament.id]);
 
     const openResolveModal = (type, mIdx, tie, rIdx = null) => {
-        if (tournament.status === 'completed' || !tie || !tie.t1 || !tie.t2 || tie.winner) return;
+        if (!tie || !tie.t1 || !tie.t2) return; 
         setSearchParams({ tie: tie.id }); 
     };
 
@@ -1921,7 +1950,6 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
             parsedGM[matchIndex].winner = tieWinnerId; parsedGM[matchIndex].score = score; parsedGM[matchIndex].matches = localMatches; parsedGM[matchIndex].type = tieType;
             const allGroupsDone = parsedGM.every(m => m && m.winner);
             if (allGroupsDone) {
-                // THE FIX: Pass the newly parsed data so it doesn't use the stale React state!
                 const sA = calcNationStandings('A', parsedGM); 
                 const sB = calcNationStandings('B', parsedGM);
                 const sC = calcNationStandings('C', parsedGM); 
@@ -1960,13 +1988,13 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
     };
 
     const handleSaveSettings = async (e) => {
-        e.preventDefault();
-        try {
-            const tRef = window.fb.doc(db, 'artifacts', appId, 'public', 'data', 'tournaments', tournament.id);
-            await window.fb.updateDoc(tRef, { name: editName.trim(), location: editLocation.trim(), hostCountry: editCountry, description: editDesc.trim() });
-            setShowSettings(false);
-        } catch (err) { console.error(err); }
-    };
+        e.preventDefault();
+        try {
+            const tRef = window.fb.doc(db, 'artifacts', appId, 'public', 'data', 'tournaments', tournament.id);
+            await window.fb.updateDoc(tRef, { name: editName.trim(), location: editLocation.trim(), hostCountry: editCountry, description: editDesc.trim() });
+            setShowSettings(false);
+        } catch (err) { console.error(err); }
+    };
 
     const handleDelete = async () => { try { onBack(); await window.fb.deleteDoc(window.fb.doc(db, 'artifacts', appId, 'public', 'data', 'tournaments', tournament.id)); } catch(e) { console.error(e); } };
 
@@ -1982,14 +2010,14 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
     const renderTeamRow = (teamId, isWinner, isLoser, score, matches = []) => {
         if (!teamId) return <div className="h-[34px] flex items-center px-3"><span className="text-[10px] font-bold text-white/30 tracking-widest uppercase">TBD</span></div>;
         const t = getTeam(teamId);
-        const flagCode = t.flags && t.flags.length > 0 ? t.flags[0] : 'UNK';
+        const flagDisplay = t.flags && t.flags.length > 0 ? t.flags.map(f => getFlag(f)).join('') : getFlag('UNK');
         const wonMatches = Array.isArray(matches) ? matches.filter(m => m && m.winner === teamId && m.type) : [];
 
         return (
             <div className={`relative px-3 py-2 flex items-center justify-between transition-colors min-h-[38px] ${isWinner ? 'bg-rose-500/10' : 'bg-transparent'}`}>
                 {isWinner && <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-r shadow-[0_0_8px_rgba(244,63,94,0.8)] bg-rose-400"></div>}
                 <div className={`flex items-center gap-2.5 overflow-hidden w-full pr-2 transition-all duration-300 ${isLoser ? 'opacity-40 grayscale' : ''}`}>
-                    <span className="text-lg drop-shadow-md shrink-0 leading-none">{getFlag(flagCode)}</span>
+                    <span className="text-lg drop-shadow-md shrink-0 leading-none tracking-widest">{flagDisplay}</span>
                     <span className={`text-xs truncate ${isWinner ? 'text-white font-black drop-shadow-md' : 'text-white/80 font-bold'}`}>{t.name}</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -2010,6 +2038,8 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
 
     const renderTieBox = (tie, type, mIdx, rIdx = null) => {
         const isReady = tie && tie.t1 && tie.t2 && !tie.winner;
+        const isCompleted = tie && tie.winner;
+        
         let t1Score = null; let t2Score = null;
         if (tie && tie.score) {
             const [s1, s2] = tie.score.split('-');
@@ -2018,7 +2048,11 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
 
         return (
             <div key={tie.id} onClick={() => openResolveModal(type, mIdx, tie, rIdx)} 
-                 className={`rounded-2xl transition-all duration-300 overflow-hidden flex flex-col border shadow-sm ${isReady ? 'cursor-pointer hover:-translate-y-1 hover:shadow-lg z-20 bg-white/10 border-white/30' : tie.winner ? 'bg-black/50 border-white/10 backdrop-blur-md' : 'bg-black/20 border-white/[0.05] opacity-70 backdrop-blur-sm'}`} 
+                 className={`rounded-2xl transition-all duration-300 overflow-hidden flex flex-col border shadow-sm ${
+                     isReady ? 'cursor-pointer hover:-translate-y-1 hover:shadow-lg z-20 bg-white/10 border-white/30' : 
+                     isCompleted ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:border-white/30 bg-black/50 border-white/10 backdrop-blur-md' : 
+                     'bg-black/20 border-white/[0.05] opacity-70 backdrop-blur-sm'
+                 }`} 
                  style={{ borderColor: isReady ? tierConf.hex : undefined, boxShadow: isReady ? `0 4px 15px ${tierConf.hex}20` : undefined }}>
                 {renderTeamRow(tie.t1?.id, tie.winner === tie.t1?.id, tie.winner && tie.winner !== tie.t1?.id, t1Score, tie.matches)}
                 <div className="h-px w-full bg-white/10"></div>
@@ -2026,6 +2060,20 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
             </div>
         );
     };
+
+    const tStats = { total: 0, close: 0, dom: 0, luck: 0 };
+    [...groupMatches, ...(knockout.flat())].forEach(tie => {
+        if (tie && tie.matches && Array.isArray(tie.matches)) {
+            tie.matches.forEach(match => {
+                if (match && match.winner && match.type) {
+                    tStats.total++;
+                    if (match.type === 'close') tStats.close++;
+                    else if (match.type === 'lopsided') tStats.dom++;
+                    else if (match.type === 'random') tStats.luck++;
+                }
+            });
+        }
+    });
 
     const mapQuery = tournament.location || `${tournament.name} ${getCountryName(tournament.hostCountry)}`;
     const baseKnockoutHeight = Math.max(450, (knockout[0]?.length || 1) * 110);
@@ -2074,101 +2122,193 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
                                 <input type="text" required className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-bold focus:outline-none focus:border-gold-500/50 shadow-inner transition-colors" value={editName} onChange={e => setEditName(e.target.value)} />
                             </div>
                             <div className="grid md:grid-cols-2 gap-6">
-                                <div>
-                                    <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Location / City (For Map)</label>
-                                    <input type="text" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-medium focus:outline-none focus:border-gold-500/50 shadow-inner transition-colors" value={editLocation} onChange={e => setEditLocation(e.target.value)} placeholder="e.g. Palm Beach, Florida" />
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Host Country (Flag)</label>
-                                    <div className="bg-white/5 border border-white/10 rounded-xl p-1 shadow-inner relative z-50">
-                                        <CountrySelect value={editCountry} onChange={setEditCountry} players={players} />
-                                    </div>
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Storyline / Description</label>
-                                <textarea className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-gold-500/50 shadow-inner transition-colors h-24 custom-scrollbar resize-none" value={editDesc} onChange={e => setEditDesc(e.target.value)} placeholder="Enter tournament narrative here..."></textarea>
-                            </div>
-                            <div className="flex justify-end pt-4">
-                                <button type="submit" className="bg-gold-500 hover:bg-gold-400 text-black px-8 py-3.5 rounded-xl font-black tracking-wide transition-all shadow-[0_0_20px_rgba(212,175,55,0.4)]">Save & Update Map</button>
-                            </div>
-                        </form>
-                        <div className="mt-8 pt-6 border-t border-white/10">
-                            {!showDelete ? (
-                                <button type="button" onClick={() => setShowDelete(true)} className="text-rose-400 font-bold hover:text-rose-300 transition-colors text-xs flex items-center gap-2 uppercase tracking-widest"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg> Delete Tournament</button>
-                            ) : (
-                                <div className="p-4 border border-rose-500/30 bg-rose-500/10 rounded-2xl flex justify-between items-center animate-in fade-in zoom-in duration-200">
-                                    <span className="text-rose-400 font-bold text-sm">Delete forever?</span>
-                                    <div className="flex gap-2">
-                                        <button type="button" onClick={handleDelete} className="bg-rose-500 hover:bg-rose-400 text-white transition-colors px-4 py-2 rounded-lg font-bold text-sm shadow-md">Confirm</button>
-                                        <button type="button" onClick={() => setShowDelete(false)} className="text-white/60 hover:text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm transition-colors font-bold">Cancel</button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Location / City (For Map)</label>
+                                    <input type="text" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-medium focus:outline-none focus:border-gold-500/50 shadow-inner transition-colors" value={editLocation} onChange={e => setEditLocation(e.target.value)} placeholder="e.g. Palm Beach, Florida" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Host Country (Flag)</label>
+                                    <div className="bg-white/5 border border-white/10 rounded-xl p-1 shadow-inner relative z-50">
+                                        <CountrySelect value={editCountry} onChange={setEditCountry} players={players} />
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Storyline / Description</label>
+                                <textarea className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-gold-500/50 shadow-inner transition-colors h-24 custom-scrollbar resize-none" value={editDesc} onChange={e => setEditDesc(e.target.value)} placeholder="Enter tournament narrative here..."></textarea>
+                            </div>
+                            <div className="flex justify-end pt-4">
+                                <button type="submit" className="bg-gold-500 hover:bg-gold-400 text-black px-8 py-3.5 rounded-xl font-black tracking-wide transition-all shadow-[0_0_20px_rgba(212,175,55,0.4)]">Save & Update Map</button>
+                            </div>
+                        </form>
+                        <div className="mt-8 pt-6 border-t border-white/10">
+                            {!showDelete ? (
+                                <button type="button" onClick={() => setShowDelete(true)} className="text-rose-400 font-bold hover:text-rose-300 transition-colors text-xs flex items-center gap-2 uppercase tracking-widest"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg> Delete Tournament</button>
+                            ) : (
+                                <div className="p-4 border border-rose-500/30 bg-rose-500/10 rounded-2xl flex justify-between items-center animate-in fade-in zoom-in duration-200">
+                                    <span className="text-rose-400 font-bold text-sm">Delete forever?</span>
+                                    <div className="flex gap-2">
+                                        <button type="button" onClick={handleDelete} className="bg-rose-500 hover:bg-rose-400 text-white transition-colors px-4 py-2 rounded-lg font-bold text-sm shadow-md">Confirm</button>
+                                        <button type="button" onClick={() => setShowDelete(false)} className="text-white/60 hover:text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm transition-colors font-bold">Cancel</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* --- SUMMARY VIEW --- */}
-            {viewMode === 'info' ? (
-                <div className="px-4 xl:px-0 relative z-20">
-                    <div className="w-full max-w-lg bg-black/60 backdrop-blur-2xl border border-white/10 rounded-2xl p-5 shadow-2xl animate-in slide-in-from-top-4 fade-in duration-500">
-                        {tournament.description && (
-                            <div className="mb-5 pb-4 border-b border-white/10">
-                                <p onClick={() => setExpandedDesc(!expandedDesc)} className={`text-white/70 text-xs font-medium leading-relaxed transition-all cursor-pointer ${expandedDesc ? '' : 'line-clamp-2'}`} title="Click to expand/collapse">
-                                    {tournament.description}
-                                </p>
-                                {tournament.description.length > 100 && (
-                                    <button onClick={() => setExpandedDesc(!expandedDesc)} className="text-[9px] font-black uppercase tracking-widest text-gold-400 mt-2 hover:text-gold-300 transition-colors">
-                                        {expandedDesc ? 'Show Less' : 'Read More'}
-                                    </button>
-                                )}
-                            </div>
-                        )}
+            {viewMode === 'info' ? (
+                // Changed from max-w-3xl to max-w-2xl to dramatically shrink the empty middle space
+                <div className="px-4 xl:px-0 relative z-20 w-full flex flex-col items-start max-w-2xl">
+                    
+                    {/* Description */}
+                    {tournament.description && (
+                        <div className="mb-6 w-full bg-[#0a0a0a]/80 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-lg animate-in slide-in-from-top-4 fade-in duration-500">
+                            <p onClick={() => setExpandedDesc(!expandedDesc)} className={`text-white/80 text-sm font-medium leading-relaxed transition-all cursor-pointer ${expandedDesc ? '' : 'line-clamp-2'}`} title="Click to expand/collapse">
+                                {tournament.description}
+                            </p>
+                            {tournament.description.length > 100 && (
+                                <button onClick={() => setExpandedDesc(!expandedDesc)} className="text-[10px] font-black uppercase tracking-widest text-rose-400 mt-2 hover:text-rose-300 transition-colors">
+                                    {expandedDesc ? 'Show Less' : 'Read More'}
+                                </button>
+                            )}
+                        </div>
+                    )}
 
-                        {(knockout[2]?.[1]?.winner || knockout[2]?.[0]?.winner) && (
-                            <div className="space-y-2 mb-4">
-                                {(() => {
-                                    const renderCompactTeam = (teamId, role, isChamp = false) => {
-                                        if (!teamId) return null; const t = getTeam(teamId);
-                                        return (
-                                            <div className={`flex items-center justify-between p-2 rounded-xl transition-all ${isChamp ? 'bg-gradient-to-r from-gold-500/20 to-white/5 border border-gold-500/40 shadow-md' : 'bg-white/5 border border-white/10'}`}>
-                                                <div className="flex items-center gap-2.5">
-                                                    <div className={`shrink-0 flex items-center justify-center rounded-full ${isChamp ? 'border border-gold-400 w-8 h-8 bg-black/40' : 'border border-white/20 w-7 h-7 bg-black/40'}`}>
-                                                        <span className="text-lg drop-shadow-sm leading-none">{getFlag(t.flags?.[0])}</span>
-                                                    </div>
-                                                    <div className="flex flex-col">
-                                                        <h3 className={`font-black text-white truncate max-w-[160px] ${isChamp ? 'text-sm text-gold-400' : 'text-xs'}`}>{t.name}</h3>
-                                                    </div>
-                                                </div>
-                                                <div className="pl-2 shrink-0 flex items-center gap-2">
-                                                    <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${isChamp ? 'bg-gold-500 text-black' : role === 'Finalist' ? 'bg-slate-300 text-black' : 'bg-[#cd7f32] text-black'}`}>{role}</span>
-                                                </div>
-                                            </div>
-                                        );
-                                    };
-                                    
-                                    return (
-                                        <>
-                                            {knockout[2]?.[1]?.winner && renderCompactTeam(knockout[2][1].winner, 'World Champion', true)}
-                                            {knockout[2]?.[1]?.winner && renderCompactTeam(knockout[2][1].winner === knockout[2][1].t1.id ? knockout[2][1].t2.id : knockout[2][1].t1.id, 'Finalist')}
-                                            {knockout[2]?.[0]?.winner && renderCompactTeam(knockout[2][0].winner, '3rd Place')}
-                                        </>
-                                    );
-                                })()}
-                            </div>
-                        )}
+                    {/* THE MEDAL TABLE / LEADERBOARD */}
+                    <div className="flex flex-col gap-2 w-full mb-6 animate-in slide-in-from-top-4 fade-in duration-500 delay-100">
+                        {(() => {
+                            let rankedIds = [];
+                            let unrankedIds = teams.map(t => t.id);
 
-                        {!knockout[2]?.[1]?.winner && (
-                            <div className="text-center py-6 border-b border-white/10 mb-4">
-                                <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest">Tournament in Progress</h3>
-                                <p className="text-white/30 text-xs mt-1">The podium will be revealed once the final ties are resolved.</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            ) : (
+                            if (knockout[2]?.[1]?.winner) {
+                                const champ = knockout[2][1].winner;
+                                const finalist = knockout[2][1].t1.id === champ ? knockout[2][1].t2.id : knockout[2][1].t1.id;
+                                const third = knockout[2]?.[0]?.winner;
+                                const fourth = third ? (knockout[2][0].t1.id === third ? knockout[2][0].t2.id : knockout[2][0].t1.id) : null;
+                                
+                                rankedIds.push(champ, finalist);
+                                if (third) rankedIds.push(third);
+                                if (fourth) rankedIds.push(fourth);
+                                
+                                if (knockout[0]) {
+                                    knockout[0].forEach(tie => {
+                                        if (tie && tie.winner) {
+                                            const loser = tie.winner === tie.t1.id ? tie.t2.id : tie.t1.id;
+                                            if (loser && !rankedIds.includes(loser)) rankedIds.push(loser);
+                                        }
+                                    });
+                                }
+                            }
+
+                            unrankedIds = unrankedIds.filter(id => !rankedIds.includes(id));
+                            const orderedTeams = [...rankedIds, ...unrankedIds].map(id => getTeam(id)).filter(Boolean);
+                            const visibleTeams = showAllNations ? orderedTeams : orderedTeams.slice(0, 4);
+
+                            return visibleTeams.map((team, index) => {
+                                const rank = index + 1;
+                                const isChamp = knockout[2]?.[1]?.winner && rank === 1;
+                                
+                                let rankNode;
+                                if (isChamp) rankNode = <div className="w-8 h-8 rounded-lg bg-gold-500 text-black font-black flex items-center justify-center text-sm shadow-[0_0_10px_rgba(212,175,55,0.5)] shrink-0">1</div>;
+                                else if (knockout[2]?.[1]?.winner && rank === 2) rankNode = <div className="w-8 h-8 rounded-lg bg-slate-300 text-black font-black flex items-center justify-center text-sm shadow-[0_0_10px_rgba(203,213,225,0.5)] shrink-0">2</div>;
+                                else if (knockout[2]?.[0]?.winner && rank === 3) rankNode = <div className="w-8 h-8 rounded-lg bg-[#cd7f32] text-black font-black flex items-center justify-center text-sm shadow-[0_0_10px_rgba(205,127,50,0.5)] shrink-0">3</div>;
+                                else rankNode = <div className="w-8 h-8 rounded-lg bg-white/10 text-white/50 font-black flex items-center justify-center text-sm border border-white/10 shrink-0">{rank}</div>;
+
+                                return (
+                                    /* FIX 1: Removed 'overflow-hidden' from this container.
+                                    FIX 2: Added 'isolation-auto' to ensure tooltips can float above everything.
+                                    */
+                                    <div key={team.id} className={`relative flex items-center justify-between p-2.5 sm:p-3 rounded-xl border transition-all ${isChamp ? 'bg-gradient-to-r from-[#2a220a]/95 to-[#0a0a0a]/95 backdrop-blur-xl border-gold-500/40 shadow-[0_4px_15px_rgba(212,175,55,0.25)] z-10' : 'bg-[#0a0a0a]/85 backdrop-blur-xl border-white/10 shadow-sm hover:bg-[#111111]/95'}`}>
+
+                                        <div className="flex items-center gap-3 sm:gap-4 pr-3 relative z-10">
+                                            {rankNode}
+                                            
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                {team.flags && team.flags.length > 0 ? (
+                                                    team.flags.map((f, i) => (
+                                                        <div key={i} className="flex items-center justify-center h-8 bg-black/60 border border-white/15 rounded-md px-2 shadow-inner shrink-0 overflow-hidden">
+                                                            <span className="text-[26px] leading-none drop-shadow-md pb-[1px]">{getFlag(f)}</span>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="flex items-center justify-center h-8 bg-black/60 border border-white/15 rounded-md px-2 shadow-inner shrink-0 overflow-hidden">
+                                                        <span className="text-[26px] leading-none drop-shadow-md pb-[1px]">{getFlag('UNK')}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            <span 
+                                                onClick={(e) => { 
+                                                    e.stopPropagation(); 
+                                                    if (onNavigate && team.flags && team.flags.length > 0) {
+                                                        onNavigate('nations', null, null, team.flags[0]);
+                                                    }
+                                                }} 
+                                                className={`font-bold tracking-wide truncate cursor-pointer hover:underline transition-opacity ${isChamp ? 'text-gold-400 text-lg sm:text-xl' : 'text-white text-lg sm:text-xl'}`}
+                                            >
+                                                {team.name}
+                                            </span>
+                                        </div>
+                                        
+                                        {/* FIX 3: Removed 'overflow-hidden' from the avatar wrapper.
+                                        FIX 4: Added 'z-30' to ensure tooltips render on top of the map layer.
+                                        */}
+                                        <div className="flex items-center shrink-0 pr-1 relative z-30">
+                                            <div className="flex -space-x-3 sm:-space-x-4">
+                                                {team.players.map(pid => {
+                                                    const p = getPlayer(pid);
+                                                    return (
+                                                        /* FIX 5: Explicitly set z-index hierarchy and added 'group' 
+                                                        to trigger visibility correctly.
+                                                        */
+                                                        <div key={pid} onClick={() => onNavigate('players', pid)} className="relative group cursor-pointer hover:z-50 transition-all duration-200">
+                                                            <img 
+                                                                referrerPolicy="no-referrer" 
+                                                                src={p.images?.[0] || p.imageUrl || "https://via.placeholder.com/40"} 
+                                                                className="w-9 h-9 sm:w-11 sm:h-11 rounded-full object-cover border-[2px] border-[#0a0a0a] shadow-sm bg-black/50 group-hover:scale-110 group-hover:border-white/40 transition-transform" 
+                                                            />
+                                                            {/* FIX 6: Changed 'bottom-full' to a higher 'mb-3' 
+                                                            Added 'pointer-events-none' to ensure smooth mouse movement.
+                                                            */}
+                                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover:block bg-white text-black text-[11px] font-black px-2.5 py-1.5 rounded-lg whitespace-nowrap shadow-[0_10px_20px_rgba(0,0,0,0.5)] z-[60] pointer-events-none animate-in fade-in zoom-in-90 duration-150 border border-black/10">
+                                                                {p.name}
+                                                                {/* Arrow tail for the tooltip */}
+                                                                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-white"></div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            });
+                        })()}
+                    </div>
+
+                    {/* Inline Expand Toggle */}
+                    {teams.length > 4 && (
+                        <button onClick={() => setShowAllNations(!showAllNations)} className="w-full py-3 border border-white/10 rounded-xl bg-[#0a0a0a]/80 hover:bg-white/10 text-white/60 hover:text-white text-[10px] font-black tracking-widest uppercase transition-all mb-6 shadow-md backdrop-blur-md">
+                            {showAllNations ? '↑ Collapse to Top 4 ↑' : '↓ View All 16 Nations ↓'}
+                        </button>
+                    )}
+
+                    {/* Match Stats */}
+                    <div className="w-full flex justify-between items-center bg-[#0a0a0a]/90 backdrop-blur-xl border border-white/10 p-3 sm:p-4 rounded-xl shadow-lg mb-8">
+                        <div className="text-center px-2 flex-1"><div className="text-white/40 text-[9px] font-black uppercase tracking-widest mb-1">Matches</div><div className="text-white font-black text-sm">{tStats.total}</div></div>
+                        <div className="w-px h-8 bg-white/10"></div>
+                        <div className="text-center px-2 flex-1"><div className="text-emerald-400/60 text-[9px] font-black uppercase tracking-widest mb-1">Close</div><div className="text-emerald-400 font-black text-sm">{tStats.close}</div></div>
+                        <div className="w-px h-8 bg-white/10"></div>
+                        <div className="text-center px-2 flex-1"><div className="text-sky-400/60 text-[9px] font-black uppercase tracking-widest mb-1">Dominant</div><div className="text-sky-400 font-black text-sm">{tStats.dom}</div></div>
+                        <div className="w-px h-8 bg-white/10"></div>
+                        <div className="text-center px-2 flex-1"><div className="text-purple-400/60 text-[9px] font-black uppercase tracking-widest mb-1">Auto</div><div className="text-purple-400 font-black text-sm">{tStats.luck}</div></div>
+                    </div>
+
+                </div>
+            ) : (
                 <div className="relative w-full flex-1 flex flex-col">
                     
                     {/* SCROLL-PRESERVING BRACKET LAYER */}
@@ -2207,7 +2347,7 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
                                                                 <tr key={s.id} className={`transition-colors ${isAdvancing ? 'bg-emerald-500/10 rounded-lg' : 'hover:bg-white/5'}`}>
                                                                     <td className="px-2 py-2 flex items-center gap-1.5">
                                                                         <span className={`w-4 h-4 flex items-center justify-center rounded-full text-[8px] font-black shadow-sm shrink-0 ${isAdvancing ? 'bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'bg-white/10 text-white/80 border border-white/10'}`}>{idx+1}</span>
-                                                                        <span className="text-sm drop-shadow-sm ml-1 shrink-0">{getFlag(flagCode)}</span>
+                                                                        <span className="text-sm drop-shadow-sm ml-1 shrink-0 tracking-widest">{t.flags && t.flags.length > 0 ? t.flags.map(f => getFlag(f)).join('') : getFlag('UNK')}</span>
                                                                         <span className="font-bold text-xs truncate tracking-tight">{t.name}</span>
                                                                     </td>
                                                                     <td className="px-2 py-2 text-center font-bold tabular-nums text-xs">{s.wins}-{s.losses}</td>
@@ -2402,7 +2542,7 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
                                                             </div>
 
                                                             <div className="flex-1 flex w-full gap-4 items-center justify-between">
-                                                                <div className={`flex flex-col items-center gap-1.5 flex-1 transition-all ${t2WinsThisMatch ? 'opacity-30 grayscale' : ''}`}>
+                                                                <div onClick={(e) => { e.stopPropagation(); onNavigate('players', p1a.id); }} className={`flex flex-col items-center gap-1.5 flex-1 transition-all cursor-pointer hover:scale-105 ${t2WinsThisMatch ? 'opacity-30 grayscale' : ''}`}>
                                                                     <img referrerPolicy="no-referrer" src={p1a.images?.[0] || p1a.imageUrl || "https://via.placeholder.com/40"} className="w-10 h-10 rounded-full object-cover border-2 border-white/20 shadow-md bg-black/50" />
                                                                     <span className={`font-bold text-xs text-center ${t1WinsThisMatch ? 'text-white' : 'text-white/70'}`}>{p1a.name}</span>
                                                                     {t1WinsThisMatch && <span className="bg-rose-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm">WINNER</span>}
@@ -2410,7 +2550,7 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
                                                                 
                                                                 <div className="shrink-0 text-white/20 font-black italic text-lg px-2">VS</div>
                                                                 
-                                                                <div className={`flex flex-col items-center gap-1.5 flex-1 transition-all ${t1WinsThisMatch ? 'opacity-30 grayscale' : ''}`}>
+                                                                <div onClick={(e) => { e.stopPropagation(); onNavigate('players', p2a.id); }} className={`flex flex-col items-center gap-1.5 flex-1 transition-all cursor-pointer hover:scale-105 ${t1WinsThisMatch ? 'opacity-30 grayscale' : ''}`}>
                                                                     <img referrerPolicy="no-referrer" src={p2a.images?.[0] || p2a.imageUrl || "https://via.placeholder.com/40"} className="w-10 h-10 rounded-full object-cover border-2 border-white/20 shadow-md bg-black/50" />
                                                                     <span className={`font-bold text-xs text-center ${t2WinsThisMatch ? 'text-white' : 'text-white/70'}`}>{p2a.name}</span>
                                                                     {t2WinsThisMatch && <span className="bg-rose-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm">WINNER</span>}
@@ -2433,9 +2573,15 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
                                                     <br/>
                                                     <span className="text-white/30 text-[9px]">Current Score: {resolvingTie.t1.name} {t1w} - {t2w} {resolvingTie.t2.name}</span>
                                                 </div>
-                                                <button onClick={submitTieResult} disabled={!canSubmit} className="w-full md:w-auto bg-rose-500 hover:bg-rose-400 text-white px-8 py-3 rounded-xl font-black tracking-widest uppercase transition-all shadow-[0_0_20px_rgba(244,63,94,0.4)] disabled:opacity-30 disabled:cursor-not-allowed text-xs">
-                                                    Confirm Final Result
-                                                </button>
+                                                {resolvingTie.winner ? (
+                                                    <div className="w-full md:w-auto bg-white/5 text-white/40 px-8 py-3 rounded-xl font-black tracking-widest uppercase text-xs text-center border border-white/5">
+                                                        Match Concluded
+                                                    </div>
+                                                ) : (
+                                                    <button onClick={submitTieResult} disabled={!canSubmit} className="w-full md:w-auto bg-rose-500 hover:bg-rose-400 text-white px-8 py-3 rounded-xl font-black tracking-widest uppercase transition-all shadow-[0_0_20px_rgba(244,63,94,0.4)] disabled:opacity-30 disabled:cursor-not-allowed text-xs">
+                                                        Confirm Final Result
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -2446,6 +2592,8 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
                 </div>
             )}
             
+            
+
             {/* Cinematic Resolve Modal */}
             <ResolveMatchModal 
                 resolvingMatch={resolvingSubMatch} 
@@ -2458,6 +2606,7 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
                 tierConf={tierConf} 
                 onNavigate={onNavigate} 
             />
+            
         </div>
     );
 }

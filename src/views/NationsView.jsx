@@ -7,50 +7,148 @@ import { getGlobalHistory, getTournamentTier, getFlag, getCountryName, attachDif
 import { TOURNAMENT_TIERS } from '../utils/constants';
 
 function NationAchievements({ code, players, tournaments, onNavigate }) {
-    const list = [];
-    tournaments.forEach(t => {
-        if (t.status !== 'completed' || !t.bracket) return;
-        const tTier = getTournamentTier(t);
+    const { nationalTitles, playerTitles } = React.useMemo(() => {
+        const nTitles = [];
+        const pTitles = [];
         
-        if (tTier === 'nations_league') {
-            let b = []; try { b = typeof t.bracket === 'string' ? JSON.parse(t.bracket) : t.bracket; } catch(e){}
-            const finalTie = b[2]?.[1];
-            if (finalTie?.winner) {
-                let tms = []; try { tms = typeof t.teams === 'string' ? JSON.parse(t.teams) : t.teams; } catch(e){}
-                const winningTeam = tms.find(team => team.id === finalTie.winner);
-                if (winningTeam && winningTeam.flag === code) {
-                    list.push({ tournamentId: t.id, tournamentName: t.name, tier: tTier, result: 'Winner', date: t.completedAt || t.createdAt, hostCountry: t.hostCountry, winner: { name: winningTeam.name } });
-                }
-            }
-        } else if (['grand_slam', 'major', 'finals'].includes(tTier)) {
-            let b = []; try { b = typeof t.bracket === 'string' ? JSON.parse(t.bracket) : t.bracket; } catch(e){}
-            const finalMatch = b[b.length - 1]?.[0];
-            if (finalMatch?.winner) {
-                const winner = players.find(p => p.id === finalMatch.winner);
-                if (winner && (winner.nationality || 'UNK') === code) {
-                    list.push({ tournamentId: t.id, tournamentName: t.name, tier: tTier, result: 'Winner', date: t.completedAt || t.createdAt, hostCountry: t.hostCountry, winner: winner });
-                }
-            }
-        }
-    });
+        if (!tournaments || !tournaments.length) return { nationalTitles: nTitles, playerTitles: pTitles };
 
-    if (list.length === 0) return null;
-    list.sort((a,b) => (b.date || 0) - (a.date || 0));
+        tournaments.forEach(t => {
+            if (t.status !== 'completed' || !t.bracket) return;
+            const tTier = getTournamentTier(t);
+
+            // --- EXTRACT NATIONAL TEAM HONORS ---
+            if (tTier === 'nations_league') {
+                let b = []; try { b = typeof t.bracket === 'string' ? JSON.parse(t.bracket) : t.bracket; } catch(e){}
+                let tms = []; try { tms = typeof t.teams === 'string' ? JSON.parse(t.teams) : t.teams; } catch(e){}
+                
+                const finalTie = b[2]?.[1];
+                const thirdTie = b[2]?.[0];
+                
+                // Helper to check if the current nation's code is part of the team's flags
+                const getTeamIfInvolved = (teamId) => {
+                    if (!teamId) return null;
+                    const team = tms.find(tm => tm.id === teamId);
+                    if (team && team.flags && team.flags.includes(code)) return team;
+                    return null;
+                };
+
+                // Check for Winner and Finalist (1st & 2nd)
+                if (finalTie?.winner) {
+                    const firstPlaceId = finalTie.winner;
+                    const secondPlaceId = finalTie.t1?.id === firstPlaceId ? finalTie.t2?.id : finalTie.t1?.id;
+                    
+                    const firstTeam = getTeamIfInvolved(firstPlaceId);
+                    if (firstTeam) nTitles.push({ tournament: t, result: 'Winner', teamName: firstTeam.name });
+
+                    const secondTeam = getTeamIfInvolved(secondPlaceId);
+                    if (secondTeam) nTitles.push({ tournament: t, result: 'Finalist', teamName: secondTeam.name });
+                }
+                
+                // Check for Third Place
+                if (thirdTie?.winner) {
+                    const thirdTeam = getTeamIfInvolved(thirdTie.winner);
+                    if (thirdTeam) nTitles.push({ tournament: t, result: 'Third Place', teamName: thirdTeam.name });
+                }
+
+            // --- EXTRACT INDIVIDUAL PLAYER TITLES ---
+            } else if (['grand_slam', 'major', 'finals'].includes(tTier)) {
+                let b = []; try { b = typeof t.bracket === 'string' ? JSON.parse(t.bracket) : t.bracket; } catch(e){}
+                const finalMatch = b[b.length - 1]?.[0];
+                if (finalMatch?.winner) {
+                    const winner = players.find(p => p.id === finalMatch.winner);
+                    if (winner && (winner.nationality || 'UNK') === code) {
+                        pTitles.push({ tournament: t, result: 'Winner', playerName: winner.name });
+                    }
+                }
+            }
+        });
+
+        // Sort: Winners first, then by date descending
+        const sorter = (a, b) => {
+            if (a.result === 'Winner' && b.result !== 'Winner') return -1;
+            if (b.result === 'Winner' && a.result !== 'Winner') return 1;
+            return (b.tournament.completedAt || 0) - (a.tournament.completedAt || 0);
+        };
+
+        return { 
+            nationalTitles: nTitles.sort(sorter), 
+            playerTitles: pTitles.sort(sorter) 
+        };
+    }, [tournaments, players, code]);
+
+    // If the nation has absolutely no titles, we don't render the section
+    if (nationalTitles.length === 0 && playerTitles.length === 0) return null;
+
+    // Helper function to render a sleek, uniform achievement card for both types
+    const renderCard = (ach, nameLabel) => {
+        const isWinner = ach.result === 'Winner';
+        const isSilver = ach.result === 'Finalist';
+        const tTier = getTournamentTier(ach.tournament);
+        
+        // Dynamic badge styling based on placement
+        const badgeColor = isWinner ? 'bg-gold-500/20 text-gold-500 border-gold-500/30' : 
+                           isSilver ? 'bg-slate-300/20 text-slate-300 border-slate-300/30' : 
+                           'bg-[#cd7f32]/20 text-[#cd7f32] border-[#cd7f32]/30';
+
+        return (
+            <div key={ach.tournament.id + ach.result} onClick={() => onNavigate('tournaments', null, ach.tournament.id)} className="bg-[#0a0a0a] border border-white/5 hover:border-white/20 rounded-2xl p-5 flex flex-col items-center text-center transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer group shadow-inner">
+                {/* Background Glow */}
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-xl pointer-events-none rounded-full" style={{ background: `radial-gradient(circle, ${TOURNAMENT_TIERS[tTier]?.hex || '#d4af37'}20 0%, transparent 70%)` }}></div>
+                
+                {/* The Trophy/Medal */}
+                <div className="h-24 flex items-center justify-center mb-4 transition-transform duration-500 group-hover:scale-110 drop-shadow-xl relative z-10">
+                    <DynamicTrophy tier={tTier} result={ach.result} country={ach.tournament.hostCountry} size={64} />
+                </div>
+                
+                {/* Tournament Tier Badge */}
+                <div className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border mb-3 relative z-10 shadow-sm ${badgeColor}`}>
+                    {tTier === 'nations_league' ? 'Nations League' : TOURNAMENT_TIERS[tTier]?.name || 'Major'}
+                </div>
+                
+                <h3 className="text-xl font-black text-white tracking-tight mb-1 relative z-10">{ach.result}</h3>
+                
+                {/* Winner Name (Team or Player) */}
+                <div className="font-bold text-white/80 text-sm mb-2 relative z-10 truncate w-full px-2" title={nameLabel}>{nameLabel}</div>
+                
+                <div className="text-[11px] text-white/40 font-bold tracking-wide uppercase relative z-10 truncate w-full px-2">{ach.tournament.name}</div>
+            </div>
+        );
+    };
 
     return (
         <div id="nation-trophies" className="bg-white/5 backdrop-blur-2xl p-6 md:p-8 rounded-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] scroll-mt-8 mt-8">
-            <h2 className="text-2xl font-black text-white flex items-center gap-3 mb-8 tracking-tight"><Trophy size={24} className="text-gold-500"/> Major Achievements</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {list.map((ach, i) => (
-                    <div key={i} onClick={() => onNavigate('tournaments', null, ach.tournamentId)} className="relative bg-black/20 border border-white/5 p-6 rounded-2xl flex flex-col items-center text-center cursor-pointer transition-all duration-300 group hover:-translate-y-1.5 hover:bg-white/10 shadow-inner">
-                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-xl pointer-events-none rounded-full" style={{ background: `radial-gradient(circle, ${TOURNAMENT_TIERS[ach.tier]?.hex || '#d4af37'}20 0%, transparent 70%)` }}></div>
-                        <DynamicTrophy tier={ach.tier} result={ach.result} country={ach.hostCountry} size={56} className="mb-4 transition-transform duration-500 group-hover:scale-110 drop-shadow-xl relative z-10" />
-                        <span className={`text-[9px] uppercase font-black tracking-widest px-2.5 py-1 rounded-md mb-3 relative z-10 shadow-sm ${TOURNAMENT_TIERS[ach.tier]?.bg || 'bg-white/10'} ${TOURNAMENT_TIERS[ach.tier]?.color || 'text-white/60'}`}>{TOURNAMENT_TIERS[ach.tier].name}</span>
-                        <div className="font-black text-white text-lg group-hover:text-gold-400 transition-colors relative z-10">{ach.winner.name}</div>
-                        <div className="text-[11px] text-white/50 mt-1.5 font-bold tracking-wide relative z-10">{ach.tournamentName}</div>
+            
+            {/* --- SECTION 1: NATIONAL TEAM HONORS --- */}
+            {nationalTitles.length > 0 && (
+                <div className={playerTitles.length > 0 ? "mb-12" : ""}>
+                    <div className="flex items-center gap-4 mb-8">
+                        <h2 className="text-2xl font-black text-white flex items-center gap-3 tracking-tight">
+                            <Trophy size={24} className="text-gold-500"/> National Team Honors
+                        </h2>
+                        <div className="h-px flex-1 bg-gradient-to-r from-white/20 to-transparent"></div>
                     </div>
-                ))}
-            </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                        {nationalTitles.map((ach) => renderCard(ach, ach.teamName))}
+                    </div>
+                </div>
+            )}
+
+            {/* --- SECTION 2: INDIVIDUAL PLAYER TITLES --- */}
+            {playerTitles.length > 0 && (
+                <div>
+                    <div className="flex items-center gap-4 mb-8">
+                        <h2 className="text-2xl font-black text-white flex items-center gap-3 tracking-tight">
+                            <Trophy size={24} className="text-sky-400"/> Individual Major Titles
+                        </h2>
+                        <div className="h-px flex-1 bg-gradient-to-r from-white/20 to-transparent"></div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                        {playerTitles.map((ach) => renderCard(ach, ach.playerName))}
+                    </div>
+                </div>
+            )}
+            
         </div>
     );
 }

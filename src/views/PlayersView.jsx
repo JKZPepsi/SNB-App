@@ -213,7 +213,7 @@ export function PlayerProfile({ player, players, playersRaw, onBack, tournaments
                 played: res.played,
                 achievement: ach || null
             };
-        }).filter(h => h.rank > 0);
+        }).filter(h => h.rank > 0 && h.tier !== 'nations_league');
     }, [player?.id, playersRaw, tournaments, achievements]);
 
     if (!player) return null;
@@ -350,7 +350,8 @@ export function PlayerProfile({ player, players, playersRaw, onBack, tournaments
                             </div>
                             <div className="overflow-y-auto flex-1 custom-scrollbar p-3">
                                 <div className="space-y-2">
-                                    {player.recentTournaments.map((t, i) => {
+                                    {/* Filter out nations_league before mapping the feed */}
+                                    {player.recentTournaments.filter(t => t.tier !== 'nations_league').map((t, i) => {
                                         const tierConf = TOURNAMENT_TIERS[t.tier || 'major'];
                                         return (
                                             <div key={i} onClick={() => onNavigate('tournaments', null, t.tournamentId)} className="p-4 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-white/10 border border-transparent hover:border-white/5 transition-all group shadow-sm">
@@ -469,9 +470,35 @@ export function PlayerProfile({ player, players, playersRaw, onBack, tournaments
                                 <ChevronLeft size={32} />
                             </button>
                             
-                            <div className="w-[85vw] h-[85vh] max-w-4xl flex items-center justify-center relative shadow-[0_0_100px_rgba(0,0,0,0.8)] rounded-2xl overflow-hidden border border-white/10" onClick={e => e.stopPropagation()}>
-                                <PlayerMedia url={player.images[lightboxIndex]} className="absolute inset-0 w-full h-full object-contain" />
-                            </div>
+                            {/* THE SPLIT LOGIC FIX */}
+                            {(() => {
+                                const url = player.images[lightboxIndex];
+                                const cleanUrl = url ? url.split('?')[0].split('#')[0] : '';
+                                
+                                const isVideo = url && (
+                                    url.includes('tiktok.com') || 
+                                    url.includes('youtube.com') || 
+                                    url.includes('youtu.be') || 
+                                    cleanUrl.match(/\.(mp4|webm|ogg)$/i) ||
+                                    // NEW: Catches sneaky Reddit links that hide the mp4 request in the tracking junk!
+                                    url.includes('format=mp4') 
+                                );
+
+                                return isVideo ? (
+                                    // VIDEO: Gets a strict 9:16 vertical box
+                                    <div className="h-[85vh] aspect-[9/16] max-w-[90vw] rounded-2xl overflow-hidden border border-white/10 bg-black shadow-[0_0_100px_rgba(0,0,0,0.8)]" onClick={e => e.stopPropagation()}>
+                                        <PlayerMedia url={url} className="w-full h-full object-cover" />
+                                    </div>
+                                ) : (
+                                    // IMAGE: Raw <img> natively shrink-wraps!
+                                    <img 
+                                        src={url} 
+                                        onClick={e => e.stopPropagation()}
+                                        referrerPolicy="no-referrer"
+                                        className="h-[85vh] w-auto max-w-[90vw] object-contain rounded-2xl border border-white/10 shadow-[0_0_100px_rgba(0,0,0,0.8)] bg-black" 
+                                    />
+                                );
+                            })()}
                             
                             <button className="absolute right-4 md:right-12 top-1/2 -translate-y-1/2 text-white/50 hover:text-white bg-white/10 p-4 rounded-full backdrop-blur-md transition-all z-50 hover:scale-110 hover:bg-white/20" onClick={handleNextImg}>
                                 <ChevronRight size={32} />

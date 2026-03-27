@@ -137,86 +137,112 @@ export const TierBadge = ({ rawTier, name }) => {
     );
 };
 
-export function PlayerMedia({ url, className = "", onClick, alt }) {
-    const [loadedUrl, setLoadedUrl] = useState(null);
 
-    if (!url) return <div className={`bg-royal-800 flex items-center justify-center ${className}`}><span className="text-royal-500 text-xs font-bold">TBD</span></div>;
+export function PlayerMedia({ url, className = "", onClick, alt }) {
+    const [hasError, setHasError] = useState(false);
+    const [isLoaded, setIsLoaded] = useState(false);
+
+    // If no URL is provided at all
+    if (!url) {
+        return (
+            <div className={`bg-[#0f172a] flex items-center justify-center ${className}`}>
+                <span className="text-[#334155] text-[10px] font-black uppercase tracking-widest">TBD</span>
+            </div>
+        );
+    }
     
     let processedUrl = url.trim();
     const lowerUrl = processedUrl.toLowerCase();
-    const isLoading = loadedUrl !== processedUrl;
-    const handleLoad = () => setLoadedUrl(processedUrl);
-
-    const loadingOverlay = (
-        <div className={`absolute inset-0 flex items-center justify-center bg-royal-950/80 backdrop-blur-sm transition-opacity duration-300 z-20 ${isLoading ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-            <svg className="w-8 h-8 text-gold-500 animate-spin opacity-80" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-        </div>
-    );
 
     const wrapperClass = `relative overflow-hidden ${className.replace('object-cover', '').trim()}`;
-    const innerClass = "absolute inset-0 w-full h-full object-cover z-10";
+    const innerClass = "absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-300";
 
+    // 1. YOUTUBE
     const ytMatch = processedUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))((\w|-){11})/);
     if (ytMatch && ytMatch[1]) {
         const vid = ytMatch[1];
         const ytEmbedUrl = `https://www.youtube.com/embed/${vid}?autoplay=1&mute=1&controls=0&rel=0&showinfo=0&loop=1&playlist=${vid}&playsinline=1&modestbranding=1`;
         return (
             <div className={wrapperClass} onClick={onClick}>
-                {loadingOverlay}
+                {!isLoaded && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-20">
+                        <svg className="w-6 h-6 text-gold-500 animate-spin opacity-80" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    </div>
+                )}
                 <div className="absolute inset-0 z-30 cursor-pointer"></div>
-                <iframe onLoad={handleLoad} src={ytEmbedUrl} className="absolute inset-0 w-full h-full border-0 pointer-events-none scale-[1.35] z-10" allow="autoplay; encrypted-media"></iframe>
+                <iframe onLoad={() => setIsLoaded(true)} src={ytEmbedUrl} className="absolute inset-0 w-full h-full border-0 pointer-events-none scale-[1.35] z-10" allow="autoplay; encrypted-media"></iframe>
             </div>
         );
     }
 
-    const ttMatch = processedUrl.match(/video\/(\d+)/i) || processedUrl.match(/data-video-id="(\d+)"/i);
+    // 2. TIKTOK
+    const ttMatch = typeof url === 'string' ? (url.match(/video\/(\d+)/i) || url.match(/data-video-id="(\d+)"/i)) : null;
     if (ttMatch && ttMatch[1]) {
         const ttId = ttMatch[1];
-        const ttEmbedUrl = `https://www.tiktok.com/embed/v2/${ttId}`;
         return (
-            <div className={wrapperClass} onClick={onClick}>
-                {loadingOverlay}
-                <iframe onLoad={handleLoad} src={ttEmbedUrl} className={`${innerClass} border-0`} allowFullScreen></iframe>
+            <div className={`relative w-full h-full bg-black overflow-hidden ${className}`}>
+                <iframe src={`https://www.tiktok.com/embed/v2/${ttId}`} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-0" style={{ width: '100%', height: '100%', minWidth: '325px', minHeight: '575px' }} allowFullScreen scrolling="no"></iframe>
             </div>
         );
     }
 
+    // 3. NATIVE IFRAMES
     const isIframeString = processedUrl.startsWith('<iframe') || processedUrl.startsWith('<blockquote');
     if (isIframeString) {
-        useEffect(() => { handleLoad(); }, [processedUrl]);
+        useEffect(() => { setIsLoaded(true); }, [processedUrl]);
         return (
             <div className={wrapperClass} onClick={onClick}>
-                {loadingOverlay}
                 <div className={`absolute inset-0 z-10 flex items-center justify-center bg-black [&>iframe]:w-full [&>iframe]:h-full [&>iframe]:border-0`} dangerouslySetInnerHTML={{ __html: processedUrl }} />
             </div>
         );
     }
 
+    // 4. DIRECT VIDEO FILES
     const isVideo = lowerUrl.includes('.mp4') || lowerUrl.includes('format=mp4') || lowerUrl.includes('.webm') || lowerUrl.includes('.mov') || processedUrl.match(/\.(mp4|webm|ogg|mov)(\?.*)?$/i);
     if (isVideo) {
         return (
             <div className={wrapperClass} onClick={onClick}>
-                {loadingOverlay}
-                <video src={processedUrl} className={innerClass} autoPlay loop muted playsInline onLoadedData={handleLoad} />
+                {!isLoaded && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-20">
+                        <svg className="w-6 h-6 text-gold-500 animate-spin opacity-80" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    </div>
+                )}
+                <video src={processedUrl} className={innerClass} autoPlay loop muted playsInline onLoadedData={() => setIsLoaded(true)} />
             </div>
         );
     }
     
-    // 5. Standard Images
+    // 5. STANDARD IMAGES (Google Photos / Web Links)
     return (
         <div className={wrapperClass} onClick={onClick}>
-            {loadingOverlay}
-            <img src={processedUrl} className={innerClass} loading="lazy" decoding="async" onLoad={handleLoad} alt={alt || "Media"} 
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                    handleLoad();
-                    e.target.onerror = null; 
-                    e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' fill='%231e293b'/%3E%3Ctext x='50%25' y='50%25' fill='%2364748b' font-family='sans-serif' font-size='14' text-anchor='middle' dy='.3em'%3EInvalid Link%3C/text%3E%3C/svg%3E";
-                }}
-            />
+            {/* Loading Spinner */}
+            {!isLoaded && !hasError && (
+                <div className="absolute inset-0 flex items-center justify-center bg-[#020617] z-20">
+                    <svg className="w-5 h-5 text-white/20 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                </div>
+            )}
+            
+            {/* Clean Error State */}
+            {hasError ? (
+                <div className="absolute inset-0 bg-[#0f172a] flex flex-col items-center justify-center z-10 border border-white/5">
+                    <span className="text-[#475569] text-[9px] font-black uppercase tracking-widest text-center leading-tight">Link<br/>Error</span>
+                </div>
+            ) : (
+                <img 
+                    src={processedUrl} 
+                    className={`${innerClass} ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+                    // Removed lazy loading here to prevent the browser from cancelling requests during table scrolls!
+                    decoding="async" 
+                    onLoad={() => setIsLoaded(true)} 
+                    alt={alt || "Media"} 
+                    // This is the magic bullet for Google Photos
+                    referrerPolicy="no-referrer"
+                    onError={() => {
+                        setHasError(true);
+                        setIsLoaded(true);
+                    }}
+                />
+            )}
         </div>
     );
 }
@@ -469,28 +495,31 @@ export function FloatingPlayerNav({ hasGallery }) {
     
     return (
         <div className="fixed right-8 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-50 bg-black/40 backdrop-blur-2xl p-3 rounded-2xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] hidden xl:flex w-24">
-            <div className="text-[9px] text-white/40 uppercase tracking-widest font-bold text-center pb-2 border-b border-white/10 w-full mb-1">Jump</div>
+            <div className="text-[10px] text-white/40 uppercase tracking-widest font-bold text-center pb-2 border-b border-white/10 w-full mb-1">Jump</div>
             
-            <button onClick={scrollToTop} className="p-2 w-full text-white/30 hover:text-white transition-colors group flex flex-col items-center justify-center gap-1 mb-1">
-                <ArrowUpIcon size={16}/>
-            </button>
-
             {hasGallery && (
-                <button onClick={() => scrollToSection('player-gallery')} className="p-3 w-full bg-white/5 hover:bg-white/20 text-white/70 hover:text-white rounded-xl transition-all hover:scale-105 group flex flex-col items-center justify-center gap-1.5 border border-transparent hover:border-white/20 shadow-inner">
-                    <GalleryIcon size={20}/>
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-center">Gallery</span>
+                <button onClick={() => scrollToSection('player-gallery')} className="p-3 w-full bg-white/5 hover:bg-white/20 text-white/70 hover:text-white rounded-xl transition-all hover:scale-105 group flex flex-col items-center justify-center gap-1.5 shadow-inner border border-transparent hover:border-white/20">
+                    <GalleryIcon size={24}/>
+                    <span className="text-[9px] font-black uppercase tracking-wider text-center">Gallery</span>
                 </button>
             )}
             
-            <button onClick={() => scrollToSection('player-achievements')} className="p-3 w-full bg-white/5 hover:bg-gold-500/20 hover:text-gold-400 text-white/70 rounded-xl transition-all hover:scale-105 group flex flex-col items-center justify-center gap-1.5 border border-transparent hover:border-gold-500/30 shadow-inner">
-                <Trophy size={20}/>
-                <span className="text-[9px] font-bold uppercase tracking-wider text-center">Trophies</span>
+            <button onClick={() => scrollToSection('player-achievements')} className="p-3 w-full bg-white/5 hover:bg-white/20 text-white/70 hover:text-white rounded-xl transition-all hover:scale-105 group flex flex-col items-center justify-center gap-1.5 shadow-inner border border-transparent hover:border-white/20">
+                <Trophy size={24}/>
+                <span className="text-[9px] font-black uppercase tracking-wider text-center">Trophies</span>
             </button>
             
-            <button onClick={() => scrollToSection('player-charts')} className="p-3 w-full bg-white/5 hover:bg-white/20 text-white/70 hover:text-white rounded-xl transition-all hover:scale-105 group flex flex-col items-center justify-center gap-1.5 border border-transparent hover:border-white/20 shadow-inner">
-                <AnalyticsIcon size={20}/>
-                <span className="text-[9px] font-bold uppercase tracking-wider text-center">Charts</span>
+            <button onClick={() => scrollToSection('player-charts')} className="p-3 w-full bg-white/5 hover:bg-white/20 text-white/70 hover:text-white rounded-xl transition-all hover:scale-105 group flex flex-col items-center justify-center gap-1.5 shadow-inner border border-transparent hover:border-white/20">
+                <AnalyticsIcon size={24}/>
+                <span className="text-[9px] font-black uppercase tracking-wider text-center">Charts</span>
             </button>
+
+            <div className="mt-2 pt-4 border-t border-white/10 w-full">
+                <button onClick={scrollToTop} className="p-3 w-full bg-white/5 hover:bg-white/20 text-white/40 hover:text-white rounded-xl transition-all hover:scale-105 group flex flex-col items-center justify-center gap-1.5 shadow-inner border border-transparent hover:border-white/20">
+                    <ArrowUpIcon size={20}/>
+                    <span className="text-[9px] font-black uppercase tracking-wider text-center">Top</span>
+                </button>
+            </div>
         </div>
     );
 }

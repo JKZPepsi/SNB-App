@@ -46,13 +46,18 @@ export const getSeedText = (t, pid) => {
     if (!t || !t.selectedPlayers || !pid) return '';
     const idx = t.selectedPlayers.indexOf(pid);
     if (idx === -1) return '';
-    const size = getDrawSize(t);
+    
+    // THE FIX: Count the actual array length instead of guessing!
+    const actualSize = t.selectedPlayers.length; 
     let numSeeds = 0;
+    
     if (t.format === 'atp_finals') numSeeds = 8;
-    else if (size === 64) numSeeds = 16;
-    else if (size === 32) numSeeds = 8;
-    else if (size === 16) numSeeds = 4;
-    else if (size === 8) numSeeds = 2;
+    else if (actualSize >= 128) numSeeds = 32; 
+    else if (actualSize >= 64) numSeeds = 16;
+    else if (actualSize >= 32) numSeeds = 8;
+    else if (actualSize >= 16) numSeeds = 4;
+    else if (actualSize >= 8) numSeeds = 2;
+    
     if (idx < numSeeds) return `[${idx + 1}]`;
     return '';
 };
@@ -318,33 +323,56 @@ export const getGlobalHistory = (playersRaw, tournaments) => {
     return history;
 };
 
-export const generateKnockoutDraw = (selectedPlayers, size) => {
-    const draw = new Array(size).fill(null);
-    let numSeeds = size === 64 ? 16 : size === 32 ? 8 : size === 16 ? 4 : 2;
-    const seeds = selectedPlayers.slice(0, numSeeds);
-    const others = selectedPlayers.slice(numSeeds).sort(() => Math.random() - 0.5);
+export function generateKnockoutDraw(players, size) {
+    // 1. Perfect ATP/WTA Seeding Algorithm (1 at top, 2 at bottom, perfectly spaced)
+    let rounds = Math.log2(size);
+    let seedOrder = [1];
     
-    let seedSlots = [];
-    if(size===64) seedSlots = [0,63,31,32,15,48,16,47,7,56,24,39,8,55,23,40];
-    if(size===32) seedSlots = [0,31,15,16,7,24,8,23];
-    if(size===16) seedSlots = [0,15,7,8];
-    if(size===8) seedSlots = [0,7];
-    
-    seeds.forEach((s,i)=> { if(seedSlots[i]!==undefined) draw[seedSlots[i]] = s; });
-    let oIdx=0; for(let i=0;i<size;i++) if(!draw[i]) draw[i] = others[oIdx++];
-    
-    const bracket = [];
-    const r1 = [];
-    for(let i=0;i<size/2;i++) r1.push({id:`r0-m${i}`, p1: draw[i*2]?.id||null, p2: draw[i*2+1]?.id||null, winner:null, type:null});
-    bracket.push(r1);
-    
-    let matches = size/4;
-    for(let r=1; matches>=1; r++) {
-        const rd = [];
-        for(let i=0; i<matches; i++) rd.push({id:`r${r}-m${i}`, p1:null, p2:null, winner:null, type:null});
-        bracket.push(rd);
-        matches /= 2;
+    for (let r = 1; r <= rounds; r++) {
+        let nextOrder = [];
+        let sum = Math.pow(2, r) + 1;
+        for (let i = 0; i < seedOrder.length; i++) {
+            let s1 = seedOrder[i];
+            let s2 = sum - s1;
+            // Flip the placement on odd indices to push Seed 2 to the absolute bottom
+            if (i % 2 === 0) {
+                nextOrder.push(s1, s2);
+            } else {
+                nextOrder.push(s2, s1);
+            }
+        }
+        seedOrder = nextOrder;
     }
+
+    // 2. Map the players to the generated seed positions
+    const firstRoundMatches = [];
+    for (let i = 0; i < size; i += 2) {
+        const s1 = seedOrder[i] - 1; 
+        const s2 = seedOrder[i+1] - 1;
+        firstRoundMatches.push({
+            id: `m-0-${i/2}`,
+            p1: players[s1] ? players[s1].id : null,
+            p2: players[s2] ? players[s2].id : null,
+            winner: null,
+            type: null
+        });
+    }
+
+    // 3. Build the rest of the empty bracket
+    const bracket = [firstRoundMatches];
+    let currentRound = firstRoundMatches;
+    let r = 1;
+
+    while (currentRound.length > 1) {
+        const nextRound = [];
+        for (let i = 0; i < currentRound.length; i += 2) {
+            nextRound.push({ id: `m-${r}-${i/2}`, p1: null, p2: null, winner: null, type: null });
+        }
+        bracket.push(nextRound);
+        currentRound = nextRound;
+        r++;
+    }
+
     return bracket;
 }
 

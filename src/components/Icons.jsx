@@ -163,76 +163,306 @@ export const DynamicTrophy = ({ tier, result, country, size = 24, className = ""
 
 
     if (tier === 'nations_league') {
-        return (
-            <svg viewBox="0 0 100 180" width={size} height={size * 1.8} className={className} xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                    <linearGradient id="t-abyss" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#0F172A" />
-                        <stop offset="50%" stopColor="#1E293B" />
-                        <stop offset="100%" stopColor="#020617" />
-                    </linearGradient>
-                    <linearGradient id="t-silver" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#CBD5E1" />
-                        <stop offset="30%" stopColor="#64748B" />
-                        <stop offset="70%" stopColor="#334155" />
-                        <stop offset="100%" stopColor="#0F172A" />
-                    </linearGradient>
-                    <linearGradient id="t-glare" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#475569" />
-                        <stop offset="20%" stopColor="#F1F5F9" />
-                        <stop offset="35%" stopColor="#FFFFFF" />
-                        <stop offset="60%" stopColor="#94A3B8" />
-                        <stop offset="100%" stopColor="#334155" />
-                    </linearGradient>
-                    <linearGradient id="t-base" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#1E293B" />
-                        <stop offset="50%" stopColor="#64748B" />
-                        <stop offset="100%" stopColor="#1E293B" />
-                    </linearGradient>
-                    <filter id="t-drop-shadow" x="-30%" y="-20%" width="160%" height="140%">
-                        <feDropShadow dx="0" dy="10" stdDeviation="8" floodColor="#000000" floodOpacity="0.6"/>
-                    </filter>
-                </defs>
+        // --- 1ST PLACE: UEFA-STYLE TWISTING PLATINUM SCULPTURE ---
+        if (isWinner) {
+            return (
+                <svg viewBox="-20 -10 140 220" width={size} height={size * 1.6} className={className} xmlns="http://www.w3.org/2000/svg" style={{filter: 'drop-shadow(0 25px 35px rgba(0,0,0,0.85))'}}>
+                    <defs>
+                        {/* --- HIGH-CONTRAST PREMIUM METALLIC GRADIENTS --- */}
+                        <linearGradient id="nl-plat-face" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#ffffff" />
+                            <stop offset="15%" stopColor="#e2e8f0" />
+                            <stop offset="35%" stopColor="#94a3b8" />
+                            <stop offset="50%" stopColor="#f8fafc" />
+                            <stop offset="70%" stopColor="#cbd5e1" />
+                            <stop offset="85%" stopColor="#ffffff" />
+                            <stop offset="100%" stopColor="#475569" />
+                        </linearGradient>
 
-                {/* --- 1. THE INTERIOR VOID --- */}
-                <ellipse cx="50" cy="20" rx="30" ry="6" fill="#020617" />
-                <path d="M 20 20 C 30 70, 45 110, 45 140 L 55 140 C 55 110, 70 70, 80 20 Z" fill="#0F172A" filter="url(#t-drop-shadow)"/>
+                        <linearGradient id="nl-plat-sweep" x1="0%" y1="100%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#475569" />
+                            <stop offset="20%" stopColor="#f1f5f9" />
+                            <stop offset="45%" stopColor="#ffffff" />
+                            <stop offset="65%" stopColor="#cbd5e1" />
+                            <stop offset="85%" stopColor="#f8fafc" />
+                            <stop offset="100%" stopColor="#334155" />
+                        </linearGradient>
+                        
+                        <linearGradient id="nl-plat-fold" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#0f172a" />
+                            <stop offset="25%" stopColor="#1e293b" />
+                            <stop offset="50%" stopColor="#475569" />
+                            <stop offset="75%" stopColor="#1e293b" />
+                            <stop offset="100%" stopColor="#020617" />
+                        </linearGradient>
+                        
+                        <linearGradient id="nl-plat-shine" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#64748b" />
+                            <stop offset="30%" stopColor="#ffffff" />
+                            <stop offset="50%" stopColor="#e2e8f0" />
+                            <stop offset="70%" stopColor="#ffffff" />
+                            <stop offset="100%" stopColor="#334155" />
+                        </linearGradient>
 
-                {/* --- 2. THE BACKGROUND FLUTING (Inner Petals) --- */}
-                <path d="M 30 22 C 38 80, 47 110, 47 140 L 53 140 C 53 110, 62 80, 70 22 Z" fill="url(#t-abyss)" />
-                <path d="M 38 25 C 43 80, 48 110, 48 140 L 52 140 C 52 110, 57 80, 62 25 Z" fill="url(#t-glare)" />
+                        <linearGradient id="nl-base-dark" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stopColor="#64748b" />
+                            <stop offset="40%" stopColor="#1e293b" />
+                            <stop offset="100%" stopColor="#0f172a" />
+                        </linearGradient>
+                        
+                        <linearGradient id="nl-base-lip" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#cbd5e1" />
+                            <stop offset="25%" stopColor="#ffffff" />
+                            <stop offset="50%" stopColor="#94a3b8" />
+                            <stop offset="75%" stopColor="#ffffff" />
+                            <stop offset="100%" stopColor="#475569" />
+                        </linearGradient>
 
-                {/* --- 3. THE FOREGROUND ASCENDING BLADES --- */}
-                <path d="M 12 15 C 20 80, 42 115, 42 140 L 48 140 C 48 115, 30 70, 22 20 Z" fill="url(#t-silver)" filter="url(#t-drop-shadow)" />
-                <path d="M 88 15 C 80 80, 58 115, 58 140 L 52 140 C 52 115, 70 70, 78 20 Z" fill="url(#t-silver)" filter="url(#t-drop-shadow)" />
-                <path d="M 22 20 C 35 90, 44 120, 45 140 L 55 140 C 56 120, 65 90, 78 20 C 60 30, 40 30, 22 20 Z" fill="url(#t-glare)" filter="url(#t-drop-shadow)" />
+                        <linearGradient id="nl-flag-sweep" x1="0%" y1="100%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor={c[0]} />
+                            <stop offset="50%" stopColor={c[1]} />
+                            <stop offset="100%" stopColor={c[2]} />
+                        </linearGradient>
+                        
+                        <linearGradient id="nl-flag-ring" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor={c[0]} />
+                            <stop offset="50%" stopColor={c[1]} />
+                            <stop offset="100%" stopColor={c[2]} />
+                        </linearGradient>
 
-                {/* --- 4. PRECISION ETCHINGS & FILIGREE --- */}
-                {/* V-Chevron Pattern etched into the core for profound depth */}
-                <path d="M 46 30 L 50 38 L 54 30" fill="none" stroke="#FFFFFF" strokeWidth="0.75" opacity="0.9" />
-                <path d="M 46 45 L 50 53 L 54 45" fill="none" stroke="#FFFFFF" strokeWidth="0.75" opacity="0.7" />
-                <path d="M 47 60 L 50 68 L 53 60" fill="none" stroke="#FFFFFF" strokeWidth="0.75" opacity="0.6" />
-                <path d="M 47 75 L 50 83 L 53 75" fill="none" stroke="#FFFFFF" strokeWidth="0.75" opacity="0.5" />
-                <path d="M 48 90 L 50 98 L 52 90" fill="none" stroke="#FFFFFF" strokeWidth="0.5" opacity="0.4" />
-                <path d="M 48 105 L 50 113 L 52 105" fill="none" stroke="#FFFFFF" strokeWidth="0.5" opacity="0.3" />
-                
-                <path d="M 14 17 C 22 80, 43 115, 43 140" fill="none" stroke="#FFFFFF" strokeWidth="1.2" opacity="0.9" />
-                <path d="M 86 17 C 78 80, 57 115, 57 140" fill="none" stroke="#FFFFFF" strokeWidth="0.75" opacity="0.6" />
-                <path d="M 50 25 C 50 60, 50 110, 50 140" fill="none" stroke="#FFFFFF" strokeWidth="0.75" opacity="0.8" />
+                        <pattern id="nl-mesh" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(30)">
+                            <path d="M 0 2.5 L 5 2.5 M 2.5 0 L 2.5 5" stroke="#475569" strokeWidth="0.4" opacity="0.4" />
+                            <circle cx="2.5" cy="2.5" r="1.2" fill="none" stroke="#475569" strokeWidth="0.5" opacity="0.5" />
+                            <circle cx="2.5" cy="2.5" r="0.6" fill="#ffffff" opacity="0.8" />
+                        </pattern>
 
-                {/* --- 5. THE TRIUMPHANT CROWN (Rim) --- */}
-                <path d="M 12 15 Q 50 30 88 15" fill="none" stroke="url(#t-glare)" strokeWidth="2.5" strokeLinecap="round" />
-                <path d="M 14 14 Q 50 28 86 14" fill="none" stroke="#FFFFFF" strokeWidth="1" strokeLinecap="round" opacity="0.8" />
+                        <pattern id="nl-guilloche" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(15)">
+                            <path d="M 0 4 L 8 4 M 4 0 L 4 8 M 0 0 L 8 8 M 8 0 L 0 8" stroke="#ffffff" strokeWidth="0.2" opacity="0.3" />
+                            <circle cx="4" cy="4" r="3" fill="none" stroke="#1e293b" strokeWidth="0.6" opacity="0.4" />
+                            <circle cx="4" cy="4" r="2" fill="none" stroke="#ffffff" strokeWidth="0.4" opacity="0.6" />
+                            <circle cx="4" cy="4" r="0.8" fill="#ffffff" opacity="0.9" />
+                        </pattern>
 
-                {/* --- 6. THE FRUSTUM BASE (Cut-off Cone) --- */}
-                <path d="M 44 140 L 56 140 L 70 165 L 30 165 Z" fill="url(#t-abyss)" />
-                <path d="M 42 138 L 58 138 L 60 142 L 40 142 Z" fill="url(#t-glare)" />
-                <path d="M 36 150 L 64 150 L 66 153 L 34 153 Z" fill="url(#t-silver)" opacity="0.4" />
-                <path d="M 30 165 L 70 165 L 74 172 L 26 172 Z" fill="url(#t-base)" />
-                <ellipse cx="50" cy="172" rx="24" ry="4" fill="url(#t-abyss)" />
-                <ellipse cx="50" cy="172" rx="24" ry="4" fill="none" stroke="#FFFFFF" strokeWidth="0.5" opacity="0.5" />
-            </svg>
-        );
+                        <filter id="nl-shadow-heavy" x="-30%" y="-30%" width="160%" height="160%">
+                            <feDropShadow dx="-2" dy="4" stdDeviation="3" floodColor="#000000" floodOpacity="0.75" />
+                        </filter>
+                        <filter id="nl-shadow-light" x="-30%" y="-30%" width="160%" height="160%">
+                            <feDropShadow dx="1" dy="2" stdDeviation="2" floodColor="#0f172a" floodOpacity="0.5" />
+                        </filter>
+                    </defs>
+
+                    {/* ========================================= */}
+                    {/* 1. HEAVY MACHINED PEDESTAL                */}
+                    {/* ========================================= */}
+                    <g transform="translate(0, 10)">
+                        <ellipse cx="50" cy="180" rx="40" ry="6" fill="#020617" style={{filter: 'blur(3px)'}} />
+                        <ellipse cx="50" cy="180" rx="35" ry="8" fill="#000000" opacity="0.8" />
+                        
+                        <path d="M 15 170 L 85 170 L 85 180 C 85 185, 15 185, 15 180 Z" fill="url(#nl-base-dark)" />
+                        <path d="M 18 162 L 82 162 L 85 170 L 15 170 Z" fill="url(#nl-base-lip)" />
+                        <path d="M 18 162 L 82 162 L 85 170 L 15 170 Z" fill="url(#nl-plat-sweep)" opacity="0.5" />
+                        
+                        <ellipse cx="50" cy="170" rx="35" ry="5" fill="none" stroke="#ffffff" strokeWidth="1" opacity="0.8" />
+                        <ellipse cx="50" cy="162" rx="32" ry="4" fill="url(#nl-base-dark)" />
+                        <ellipse cx="50" cy="162" rx="32" ry="4" fill="none" stroke="#ffffff" strokeWidth="0.8" opacity="0.9" />
+
+                        <rect x="20" y="157" width="60" height="5" fill="url(#nl-flag-ring)" opacity="0.95" />
+                        <rect x="20" y="157" width="60" height="5" fill="url(#nl-base-lip)" opacity="0.3" />
+                        <path d="M 20 157 L 80 157" fill="none" stroke="#1e293b" strokeWidth="1.5" opacity="0.7" />
+                        <path d="M 20 157 L 80 157" fill="none" stroke="#ffffff" strokeWidth="0.8" opacity="0.9" />
+                        <path d="M 20 162 L 80 162" fill="none" stroke="#020617" strokeWidth="1.5" opacity="0.6" />
+                        
+                        <ellipse cx="50" cy="157" rx="30" ry="4" fill="url(#nl-base-dark)" />
+                        
+                        <path d="M 25 145 L 75 145 L 80 157 L 20 157 Z" fill="url(#nl-plat-sweep)" />
+                        <path d="M 25 145 L 75 145 L 80 157 L 20 157 Z" fill="url(#nl-guilloche)" opacity="0.4" />
+                        <ellipse cx="50" cy="145" rx="25" ry="3.5" fill="url(#nl-base-dark)" />
+                        <ellipse cx="50" cy="145" rx="25" ry="3.5" fill="none" stroke="#ffffff" strokeWidth="1" opacity="0.9" />
+                        
+                        <path d="M 30 138 L 70 138 L 75 145 L 25 145 Z" fill="url(#nl-plat-shine)" />
+                        
+                        {[25, 35, 45, 55, 65, 75].map((x, i) => (
+                            <g key={`rivet-${i}`} transform={`translate(${x}, 148)`}>
+                                <ellipse cx="0" cy="0" rx="1.5" ry="1" fill="#1e293b" />
+                                <ellipse cx="0" cy="-0.5" rx="1.2" ry="0.6" fill="#ffffff" opacity="0.9" />
+                                <ellipse cx="0" cy="-0.5" rx="0.5" ry="0.3" fill="#cbd5e1" />
+                            </g>
+                        ))}
+                    </g>
+
+                    {/* ========================================= */}
+                    {/* 2. THE TWISTING SCULPTURAL BLADES         */}
+                    {/* ========================================= */}
+                    <g transform="translate(0, -5)">
+                        <path d="M 35 150 Q 50 100 25 20 Q 55 5 75 25 Q 50 100 65 150 Z" fill="url(#nl-plat-fold)" />
+                        <path d="M 35 150 Q 50 100 25 20 Q 55 5 75 25 Q 50 100 65 150 Z" fill="url(#nl-plat-shine)" opacity="0.3" />
+                        <path d="M 35 150 Q 50 100 25 20 Q 55 5 75 25 Q 50 100 65 150 Z" fill="url(#nl-guilloche)" opacity="0.7" />
+                        
+                        <path d="M 25 20 Q 55 5 75 25" fill="none" stroke="#ffffff" strokeWidth="1.5" opacity="0.8" strokeLinecap="round" />
+                        <path d="M 25 20 Q 55 5 75 25" fill="none" stroke="#cbd5e1" strokeWidth="0.8" opacity="0.9" strokeLinecap="round" />
+                        <path d="M 35 150 Q 50 100 25 20" fill="none" stroke="#1e293b" strokeWidth="1" opacity="0.5" strokeLinecap="round" />
+
+                        <path d="M 40 150 Q 50 100 20 35 Q 50 25 85 50 Q 50 100 60 150 Z" fill="url(#nl-flag-sweep)" filter="url(#nl-shadow-light)" />
+                        <path d="M 40 150 Q 50 100 20 35 Q 50 25 85 50 Q 50 100 60 150 Z" fill="url(#nl-plat-sweep)" opacity="0.4" />
+                        <path d="M 40 150 Q 50 100 20 35 Q 50 25 85 50 Q 50 100 60 150 Z" fill="url(#nl-guilloche)" opacity="0.3" />
+                        
+                        <path d="M 20 35 Q 50 25 85 50" fill="none" stroke="#ffffff" strokeWidth="2.5" opacity="0.9" strokeLinecap="round" />
+                        <path d="M 20 35 Q 50 25 85 50" fill="none" stroke="#cbd5e1" strokeWidth="1" opacity="0.8" strokeLinecap="round" />
+
+                        <path d="M 30 150 Q 50 100 10 50 Q 45 40 85 70 Q 50 100 50 150 Z" fill="url(#nl-plat-face)" filter="url(#nl-shadow-heavy)" />
+                        <path d="M 30 150 Q 50 100 10 50 Q 45 40 85 70 Q 50 100 50 150 Z" fill="url(#nl-plat-sweep)" opacity="0.5" />
+                        <path d="M 30 150 Q 50 100 10 50 Q 45 40 85 70 Q 50 100 50 150 Z" fill="url(#nl-mesh)" opacity="0.85" />
+                        
+                        <path d="M 10 50 Q 45 40 85 70" fill="none" stroke="#ffffff" strokeWidth="3" opacity="1" strokeLinecap="round" style={{filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.8))'}} />
+                        <path d="M 10 50 Q 45 40 85 70" fill="none" stroke="#cbd5e1" strokeWidth="1.5" opacity="0.9" strokeLinecap="round" />
+                        <path d="M 10 50 Q 45 40 85 70" fill="none" stroke="#0f172a" strokeWidth="0.8" opacity="0.4" strokeLinecap="round" />
+                        <path d="M 30 150 Q 50 100 10 50" fill="none" stroke="#ffffff" strokeWidth="1.5" opacity="0.9" strokeLinecap="round" />
+                        <path d="M 30 150 Q 50 100 10 50" fill="none" stroke="#1e293b" strokeWidth="0.8" opacity="0.5" strokeLinecap="round" />
+
+                        <path d="M 45 150 Q 50 110 20 70 Q 40 65 65 95 Q 50 120 70 150 Z" fill="url(#nl-plat-face)" filter="url(#nl-shadow-heavy)" />
+                        <path d="M 45 150 Q 50 110 20 70 Q 40 65 65 95 Q 50 120 70 150 Z" fill="url(#nl-plat-shine)" opacity="0.7" />
+                        <path d="M 45 150 Q 50 110 20 70 Q 40 65 65 95 Q 50 120 70 150 Z" fill="url(#nl-guilloche)" opacity="0.85" />
+                        
+                        <path d="M 20 70 Q 40 65 65 95" fill="none" stroke="#ffffff" strokeWidth="3.5" opacity="1" strokeLinecap="round" style={{filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.7))'}} />
+                        <path d="M 20 70 Q 40 65 65 95" fill="none" stroke="#cbd5e1" strokeWidth="1.5" opacity="0.9" strokeLinecap="round" />
+                        <path d="M 45 150 Q 50 110 20 70" fill="none" stroke="#ffffff" strokeWidth="1.5" opacity="0.9" strokeLinecap="round" />
+                        <path d="M 45 150 Q 50 110 20 70" fill="none" stroke="#0f172a" strokeWidth="0.8" opacity="0.5" strokeLinecap="round" />
+
+                        {/* ========================================= */}
+                        {/* 3. FINAL POLISH, SPECULAR GLARE & CAUSTICS*/}
+                        {/* ========================================= */}
+                        <path d="M 33 145 Q 50 95 15 50" fill="none" stroke="#0f172a" strokeWidth="1" opacity="0.3" />
+                        <path d="M 32 145 Q 49 95 14 50" fill="none" stroke="#ffffff" strokeWidth="0.8" opacity="0.6" />
+
+                        <path d="M 45 35 Q 40 90 35 145" fill="none" stroke="#ffffff" strokeWidth="5" opacity="0.25" strokeLinecap="round" style={{filter: 'blur(2px)'}} />
+                        <path d="M 46 45 Q 44 90 41 135" fill="none" stroke="#ffffff" strokeWidth="2" opacity="0.7" strokeLinecap="round" style={{filter: 'blur(0.5px)'}} />
+                        <path d="M 46 45 Q 44 90 41 135" fill="none" stroke="#ffffff" strokeWidth="0.8" opacity="0.9" strokeLinecap="round" />
+                        
+                        <path d="M 70 45 Q 55 90 62 140" fill="none" stroke="#ffffff" strokeWidth="3" opacity="0.2" strokeLinecap="round" style={{filter: 'blur(1.5px)'}} />
+                        <path d="M 70 45 Q 55 90 62 140" fill="none" stroke="#ffffff" strokeWidth="1" opacity="0.5" strokeLinecap="round" />
+                        
+                        <g transform="translate(15, 45) scale(0.35)">
+                            <path d="M 0 -10 L 1.5 -1.5 L 10 0 L 1.5 1.5 L 0 10 L -1.5 1.5 L -10 0 L -1.5 -1.5 Z" fill="#ffffff" opacity="0.9" />
+                            <circle cx="0" cy="0" r="2" fill="#ffffff" />
+                        </g>
+                        <g transform="translate(80, 65) scale(0.25)">
+                            <path d="M 0 -10 L 1.5 -1.5 L 10 0 L 1.5 1.5 L 0 10 L -1.5 1.5 L -10 0 L -1.5 -1.5 Z" fill="#ffffff" opacity="0.9" />
+                            <circle cx="0" cy="0" r="2" fill="#ffffff" />
+                        </g>
+                    </g>
+                </svg>
+            );
+        }
+
+        // --- 2ND & 3RD PLACE: OLYMPIC/UEFA STYLE MEDALS ---
+        // Tightened viewBox and adjusted height/width multipliers to match standard trophy scaling
+        else if (result === 'Finalist' || result === 'Third Place') {
+            const isSilver = result === 'Finalist';
+            
+            // Adjusted Third Place to utilize distinct, warm Bronze/Copper gradients (Removes the yellow/gold look)
+            const m1 = isSilver ? '#ffffff' : '#fdba74'; // Bright copper edge
+            const m2 = isSilver ? '#94a3b8' : '#b45309'; // Warm amber/bronze mid tone
+            const m3 = isSilver ? '#475569' : '#78350f'; // Deep copper/brown core
+            const mGlow = isSilver ? '#e2e8f0' : '#fb923c'; // Orange-copper shine 
+
+            return (
+                <svg viewBox="10 0 80 150" width={size * 0.7} height={size * 1.3} className={className} xmlns="http://www.w3.org/2000/svg" style={{filter: 'drop-shadow(0 10px 15px rgba(0,0,0,0.5))'}}>
+                    <defs>
+                        <linearGradient id={`nl-med-grad-${isSilver}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor={m1} />
+                            <stop offset="50%" stopColor={m2} />
+                            <stop offset="100%" stopColor={m3} />
+                        </linearGradient>
+                        <linearGradient id={`nl-med-shine-${isSilver}`} x1="0%" y1="100%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor={m3} />
+                            <stop offset="50%" stopColor={mGlow} />
+                            <stop offset="100%" stopColor={m2} />
+                        </linearGradient>
+                        <linearGradient id="nl-ribbon-1" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor={c[0]} /><stop offset="100%" stopColor="#0f172a" />
+                        </linearGradient>
+                    </defs>
+
+                    {/* --- RIBBON (Sharp V-Fold) --- */}
+                    <polygon points="35,0 45,60 50,65 30,0" fill={c[0]} opacity="0.8" />
+                    <polygon points="65,0 55,60 50,65 70,0" fill={c[2]} opacity="0.8" />
+                    <polygon points="25,0 50,70 55,65 35,0" fill={c[0]} />
+                    <polygon points="40,0 50,70 55,65 50,0" fill={c[1]} />
+                    <polygon points="75,0 50,70 45,65 65,0" fill={c[2]} />
+                    <polygon points="50,70 45,65 55,65" fill="#000000" opacity="0.3" />
+                    
+                    {/* --- MEDAL CLASP --- */}
+                    <path d="M 45 70 L 55 70 L 53 78 L 47 78 Z" fill={m2} />
+                    <rect x="42" y="68" width="16" height="3" fill={m1} />
+
+                    {/* --- GEOMETRIC MEDAL BODY --- */}
+                    <g style={{filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.6))'}}>
+                        {/* Heavy Outer Rim */}
+                        <circle cx="50" cy="110" r="35" fill={`url(#nl-med-grad-${isSilver})`} />
+                        <circle cx="50" cy="110" r="32" fill="none" stroke={m1} strokeWidth="1.5" opacity="0.8" />
+                        
+                        {/* Beveled Core */}
+                        <circle cx="50" cy="110" r="28" fill={`url(#nl-med-shine-${isSilver})`} />
+                        <circle cx="50" cy="110" r="25" fill="none" stroke="url(#nl-ribbon-1)" strokeWidth="2" opacity="0.7" />
+
+                        {/* Geometric "Octagram" Engraving */}
+                        <rect x="34" y="94" width="32" height="32" fill="none" stroke={m3} strokeWidth="1.5" opacity="0.8" transform="rotate(0 50 110)" />
+                        <rect x="34" y="94" width="32" height="32" fill="none" stroke={m1} strokeWidth="1.5" opacity="0.8" transform="rotate(45 50 110)" />
+                        <rect x="38" y="98" width="24" height="24" fill={m3} opacity="0.2" transform="rotate(22.5 50 110)" />
+                        
+                        {/* Etched Crosshairs & Node */}
+                        <line x1="50" y1="82" x2="50" y2="138" stroke={m3} strokeWidth="1" opacity="0.5" />
+                        <line x1="22" y1="110" x2="78" y2="110" stroke={m3} strokeWidth="1" opacity="0.5" />
+                        <circle cx="50" cy="110" r="7" fill={`url(#nl-med-grad-${isSilver})`} stroke={m1} strokeWidth="1.5" />
+                        <circle cx="50" cy="110" r="3" fill={m3} opacity="0.6" />
+                    </g>
+                </svg>
+            );
+        }
+        
+        // --- PARTICIPATION: MODERN TITANIUM/GLASS SHIELD ---
+        else {
+            return (
+                <svg viewBox="0 0 100 140" width={size} height={size * 1.4} className={className} xmlns="http://www.w3.org/2000/svg" style={{filter: 'drop-shadow(0 10px 15px rgba(0,0,0,0.5))'}}>
+                    <defs>
+                        <linearGradient id="plaque-titanium" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#334155" />
+                            <stop offset="50%" stopColor="#1e293b" />
+                            <stop offset="100%" stopColor="#0f172a" />
+                        </linearGradient>
+                        <linearGradient id="plaque-glass" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.2" />
+                            <stop offset="50%" stopColor="#ffffff" stopOpacity="0.05" />
+                            <stop offset="100%" stopColor="#ffffff" stopOpacity="0.1" />
+                        </linearGradient>
+                    </defs>
+
+                    {/* Heavy Titanium Backplate */}
+                    <polygon points="15,10 85,10 90,110 50,135 10,110" fill="url(#plaque-titanium)" />
+                    <polygon points="15,10 85,10 85,15 15,15" fill="#64748b" opacity="0.5" />
+                    <polygon points="90,110 50,135 48,135 88,110" fill="#020617" opacity="0.6" />
+
+                    {/* Sharp Flag Color Slash (Enameled into the metal) */}
+                    <g style={{filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))'}}>
+                        <polygon points="10,85 85,45 85,55 12,95" fill={c[0]} />
+                        <polygon points="12,95 85,55 85,65 14,105" fill={c[1]} />
+                        <polygon points="14,105 85,65 85,75 16,113" fill={c[2]} />
+                    </g>
+
+                    {/* Frosted Glass Overlay */}
+                    <polygon points="20,20 80,20 85,105 50,125 15,105" fill="url(#plaque-glass)" stroke="#ffffff" strokeWidth="0.5" strokeOpacity="0.4" />
+                    
+                    {/* Glass Reflection Glare */}
+                    <polygon points="20,20 45,20 30,110 15,105" fill="#ffffff" opacity="0.08" />
+
+                    {/* Etched Accents */}
+                    <circle cx="50" cy="35" r="8" fill="none" stroke="#94a3b8" strokeWidth="1.5" opacity="0.6" />
+                    <circle cx="50" cy="35" r="4" fill="#94a3b8" opacity="0.8" />
+                    <line x1="30" y1="35" x2="40" y2="35" stroke="#94a3b8" strokeWidth="1" opacity="0.5" />
+                    <line x1="60" y1="35" x2="70" y2="35" stroke="#94a3b8" strokeWidth="1" opacity="0.5" />
+                </svg>
+            );
+        }
     }
 
 
