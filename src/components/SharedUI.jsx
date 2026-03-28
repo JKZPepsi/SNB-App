@@ -5,10 +5,11 @@ import { getFlag, getCountryName } from '../utils/helpers';
 
 export function Tooltip({ children, content }) {
     return (
-        <div className="group/tooltip relative flex justify-center items-center cursor-help">
+        <div className="group/tooltip relative flex justify-center items-center cursor-help isolate">
             {children}
-            <div className="absolute bottom-full mb-2 hidden group-hover/tooltip:flex flex-col bg-royal-950/95 backdrop-blur-xl border border-white/10 shadow-2xl rounded-xl p-3 text-xs w-max z-50 animate-in fade-in zoom-in duration-200">
+            <div className="absolute bottom-full mb-3 flex flex-col bg-[#050505] border border-white/20 shadow-[0_20px_40px_rgba(0,0,0,0.8)] rounded-2xl p-4 text-xs z-[100] pointer-events-none min-w-[180px] opacity-0 invisible translate-y-2 group-hover/tooltip:opacity-100 group-hover/tooltip:visible group-hover/tooltip:translate-y-0 transition-all duration-300 ease-out">
                 {content}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-[6px] border-transparent border-t-[#050505]"></div>
             </div>
         </div>
     );
@@ -31,7 +32,8 @@ export function GlassDropdown({ value, onChange, options, placeholder, hasSearch
     return (
         <div ref={wrapperRef} className="relative w-full sm:w-64 z-40">
             <div 
-                className="w-full bg-royal-900/60 backdrop-blur-md border border-white/10 rounded-xl px-4 py-2.5 text-white/90 flex justify-between items-center cursor-pointer hover:bg-white/[0.05] transition-all shadow-sm"
+                // Removed royal-900, changed to bg-black/40 to match theme. Changed py-2.5 to py-3 to match heights!
+                className="w-full bg-black/40 backdrop-blur-md border border-white/10 rounded-xl px-4 py-3 text-white/90 flex justify-between items-center cursor-pointer hover:bg-white/10 transition-all shadow-inner"
                 onClick={() => setIsOpen(!isOpen)}
             >
                 <span className="truncate text-sm font-medium tracking-wide">
@@ -40,15 +42,16 @@ export function GlassDropdown({ value, onChange, options, placeholder, hasSearch
                 <ChevronRight size={14} className={`shrink-0 text-white/40 transition-transform duration-300 ${isOpen ? 'rotate-90' : ''}`} />
             </div>
             {isOpen && (
-                <div className="absolute w-full mt-2 bg-royal-800/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] max-h-72 overflow-y-auto custom-scrollbar flex flex-col">
+                // Removed royal-800, changed to a sleek dark background (#0a0a0a)
+                <div className="absolute w-full mt-2 bg-[#0a0a0a]/95 backdrop-blur-3xl border border-white/10 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] max-h-72 overflow-y-auto custom-scrollbar flex flex-col z-[100]">
                     {hasSearch && (
-                        <div className="p-2 sticky top-0 bg-royal-800/95 backdrop-blur-md border-b border-white/5 z-10 shrink-0">
-                            <input type="text" autoFocus className="w-full bg-royal-950/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-gold-500/50 transition-colors" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} />
+                        <div className="p-2 sticky top-0 bg-[#0a0a0a]/95 backdrop-blur-md border-b border-white/5 z-10 shrink-0">
+                            <input type="text" autoFocus className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-gold-500/50 transition-colors" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} />
                         </div>
                     )}
                     <div className="flex-1 overflow-y-auto py-1">
                         {filteredOptions.map(o => (
-                            <div key={o.value} className="px-4 py-2.5 hover:bg-white/5 cursor-pointer flex items-center text-white/80 transition-colors" onClick={() => { onChange(o.value); setIsOpen(false); setSearch(''); }}>
+                            <div key={o.value} className="px-4 py-2.5 hover:bg-white/10 cursor-pointer flex items-center text-white/80 transition-colors" onClick={() => { onChange(o.value); setIsOpen(false); setSearch(''); }}>
                                 {o.renderOption || <span className="font-medium text-sm truncate">{o.label}</span>}
                             </div>
                         ))}
@@ -141,12 +144,22 @@ export const TierBadge = ({ rawTier, name }) => {
 export function PlayerMedia({ url, className = "", onClick, alt }) {
     const [hasError, setHasError] = useState(false);
     const [isLoaded, setIsLoaded] = useState(false);
+    const imgRef = useRef(null);
 
-    // If no URL is provided at all
+    // FIX: Catch images that are already loaded in the browser cache!
+    useEffect(() => {
+        setIsLoaded(false);
+        setHasError(false);
+
+        if (imgRef.current && imgRef.current.complete) {
+            setIsLoaded(true);
+        }
+    }, [url]);
+
     if (!url) {
         return (
-            <div className={`bg-[#0f172a] flex items-center justify-center ${className}`}>
-                <span className="text-[#334155] text-[10px] font-black uppercase tracking-widest">TBD</span>
+            <div className={`bg-[#0a0a0a] border border-white/5 flex items-center justify-center ${className}`}>
+                <span className="text-gold-500/40 text-[10px] font-black uppercase tracking-widest">TBD</span>
             </div>
         );
     }
@@ -155,7 +168,17 @@ export function PlayerMedia({ url, className = "", onClick, alt }) {
     const lowerUrl = processedUrl.toLowerCase();
 
     const wrapperClass = `relative overflow-hidden ${className.replace('object-cover', '').trim()}`;
-    const innerClass = "absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-300";
+    const innerClass = "absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-500 ease-out";
+
+    // --- SLEEK IOS GLASSMORPHISM LOADER ---
+    const loadingOverlay = (
+        <div className={`absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-md transition-opacity duration-300 z-20 ${isLoaded || hasError ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+            <svg className="w-1/3 h-1/3 max-w-[24px] max-h-[24px] text-white/50 animate-spin drop-shadow-md" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"></circle>
+                <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        </div>
+    );
 
     // 1. YOUTUBE
     const ytMatch = processedUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))((\w|-){11})/);
@@ -164,11 +187,7 @@ export function PlayerMedia({ url, className = "", onClick, alt }) {
         const ytEmbedUrl = `https://www.youtube.com/embed/${vid}?autoplay=1&mute=1&controls=0&rel=0&showinfo=0&loop=1&playlist=${vid}&playsinline=1&modestbranding=1`;
         return (
             <div className={wrapperClass} onClick={onClick}>
-                {!isLoaded && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-20">
-                        <svg className="w-6 h-6 text-gold-500 animate-spin opacity-80" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                    </div>
-                )}
+                {loadingOverlay}
                 <div className="absolute inset-0 z-30 cursor-pointer"></div>
                 <iframe onLoad={() => setIsLoaded(true)} src={ytEmbedUrl} className="absolute inset-0 w-full h-full border-0 pointer-events-none scale-[1.35] z-10" allow="autoplay; encrypted-media"></iframe>
             </div>
@@ -179,9 +198,18 @@ export function PlayerMedia({ url, className = "", onClick, alt }) {
     const ttMatch = typeof url === 'string' ? (url.match(/video\/(\d+)/i) || url.match(/data-video-id="(\d+)"/i)) : null;
     if (ttMatch && ttMatch[1]) {
         const ttId = ttMatch[1];
+        const ttEmbedUrl = `https://www.tiktok.com/embed/v2/${ttId}`;
         return (
             <div className={`relative w-full h-full bg-black overflow-hidden ${className}`}>
-                <iframe src={`https://www.tiktok.com/embed/v2/${ttId}`} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-0" style={{ width: '100%', height: '100%', minWidth: '325px', minHeight: '575px' }} allowFullScreen scrolling="no"></iframe>
+                {loadingOverlay}
+                <iframe 
+                    onLoad={() => setIsLoaded(true)}
+                    src={ttEmbedUrl} 
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-0 z-10" 
+                    style={{ width: '100%', height: '100%', minWidth: '325px', minHeight: '575px' }}
+                    allowFullScreen
+                    scrolling="no"
+                ></iframe>
             </div>
         );
     }
@@ -192,6 +220,7 @@ export function PlayerMedia({ url, className = "", onClick, alt }) {
         useEffect(() => { setIsLoaded(true); }, [processedUrl]);
         return (
             <div className={wrapperClass} onClick={onClick}>
+                {loadingOverlay}
                 <div className={`absolute inset-0 z-10 flex items-center justify-center bg-black [&>iframe]:w-full [&>iframe]:h-full [&>iframe]:border-0`} dangerouslySetInnerHTML={{ __html: processedUrl }} />
             </div>
         );
@@ -202,44 +231,35 @@ export function PlayerMedia({ url, className = "", onClick, alt }) {
     if (isVideo) {
         return (
             <div className={wrapperClass} onClick={onClick}>
-                {!isLoaded && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-20">
-                        <svg className="w-6 h-6 text-gold-500 animate-spin opacity-80" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                    </div>
-                )}
+                {loadingOverlay}
                 <video src={processedUrl} className={innerClass} autoPlay loop muted playsInline onLoadedData={() => setIsLoaded(true)} />
             </div>
         );
     }
     
-    // 5. STANDARD IMAGES (Google Photos / Web Links)
+    // 5. STANDARD IMAGES
     return (
         <div className={wrapperClass} onClick={onClick}>
-            {/* Loading Spinner */}
-            {!isLoaded && !hasError && (
-                <div className="absolute inset-0 flex items-center justify-center bg-[#020617] z-20">
-                    <svg className="w-5 h-5 text-white/20 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                </div>
-            )}
+            {loadingOverlay}
             
-            {/* Clean Error State */}
             {hasError ? (
-                <div className="absolute inset-0 bg-[#0f172a] flex flex-col items-center justify-center z-10 border border-white/5">
-                    <span className="text-[#475569] text-[9px] font-black uppercase tracking-widest text-center leading-tight">Link<br/>Error</span>
+                <div className="absolute inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center z-10 border border-white/5">
+                    <span className="text-gold-500/50 text-[9px] font-black uppercase tracking-widest text-center leading-tight">Link<br/>Error</span>
                 </div>
             ) : (
                 <img 
+                    ref={imgRef}
                     src={processedUrl} 
-                    className={`${innerClass} ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
-                    // Removed lazy loading here to prevent the browser from cancelling requests during table scrolls!
+                    className={`${innerClass} ${isLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}`}
                     decoding="async" 
                     onLoad={() => setIsLoaded(true)} 
                     alt={alt || "Media"} 
-                    // This is the magic bullet for Google Photos
                     referrerPolicy="no-referrer"
-                    onError={() => {
+                    onError={(e) => {
                         setHasError(true);
                         setIsLoaded(true);
+                        e.target.onerror = null; 
+                        e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' fill='%230a0a0a'/%3E%3Ctext x='50%25' y='50%25' fill='%23d4af37' font-family='sans-serif' font-size='11' font-weight='bold' text-anchor='middle' dy='.3em'%3EInvalid Link%3C/text%3E%3C/svg%3E";
                     }}
                 />
             )}

@@ -395,10 +395,10 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
         <div className="h-full flex flex-col pb-20 relative max-w-6xl mx-auto w-full pt-8">
             <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#020617]">
                 <iframe 
-                    src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=k&z=13&ie=UTF8&iwloc=&output=embed`} 
-                    className="w-[110%] h-[110%] -translate-x-[2%] -translate-y-[5%] opacity-40 saturate-[1.2] transition-all duration-1000 absolute left-0 top-0"
-                    frameBorder="0"
-                    loading="lazy"
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=k&z=15&ie=UTF8&iwloc=near&output=embed`} 
+                    className="w-[130%] h-[130%] -translate-x-[15%] -translate-y-[15%] opacity-50 saturate-[1.2] absolute left-0 top-0 transition-all duration-[3000ms] pointer-events-none" 
+                    frameBorder="0" 
+                    loading="lazy" 
                 />
                 <div className="absolute inset-0 bg-gradient-to-b from-[#020617]/80 via-[#020617]/60 to-[#020617]/95 z-10"></div>
             </div>
@@ -1031,10 +1031,10 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
         <div className="h-full flex flex-col pb-20 relative max-w-[1600px] mx-auto w-full">
             <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#020617]">
                 <iframe 
-                    src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=k&z=13&ie=UTF8&iwloc=&output=embed`} 
-                    className="w-[130%] h-[130%] -translate-x-[15%] -translate-y-[15%] opacity-50 saturate-[1.2] absolute left-0 top-0 transition-all duration-[3000ms]"
-                    frameBorder="0"
-                    loading="lazy"
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=k&z=15&ie=UTF8&iwloc=near&output=embed`} 
+                    className="w-[130%] h-[130%] -translate-x-[15%] -translate-y-[15%] opacity-50 saturate-[1.2] absolute left-0 top-0 transition-all duration-[3000ms] pointer-events-none" 
+                    frameBorder="0" 
+                    loading="lazy" 
                 />
                 <div className="absolute inset-0 bg-gradient-to-b from-[#020617]/50 via-[#020617]/10 to-[#020617]/90 z-10"></div>
             </div>
@@ -1544,7 +1544,12 @@ export function SNBInternationalsBracket({ tournament, allTournaments = [], play
         <div className="min-h-full flex flex-col pb-20 relative max-w-[1600px] mx-auto w-full">
             
             <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#020617]">
-                <iframe src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=k&z=13&ie=UTF8&iwloc=&output=embed`} className="w-[130%] h-[130%] -translate-x-[15%] -translate-y-[15%] opacity-50 saturate-[1.2] absolute left-0 top-0 transition-all duration-[3000ms]" frameBorder="0" loading="lazy" />
+                <iframe 
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=k&z=15&ie=UTF8&iwloc=near&output=embed`} 
+                    className="w-[130%] h-[130%] -translate-x-[15%] -translate-y-[15%] opacity-50 saturate-[1.2] absolute left-0 top-0 transition-all duration-[3000ms] pointer-events-none" 
+                    frameBorder="0" 
+                    loading="lazy" 
+                />
                 <div className="absolute inset-0 bg-gradient-to-b from-[#020617]/50 via-[#020617]/10 to-[#020617]/90 z-10"></div>
             </div>
 
@@ -2081,7 +2086,12 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
     return (
         <div className="min-h-full flex flex-col pb-20 relative max-w-[1600px] mx-auto w-full">
             <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#020617]">
-                <iframe src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=k&z=13&ie=UTF8&iwloc=&output=embed`} className="w-[130%] h-[130%] -translate-x-[15%] -translate-y-[15%] opacity-50 saturate-[1.2] absolute left-0 top-0 transition-all duration-[3000ms]" frameBorder="0" loading="lazy" />
+                <iframe 
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=k&z=15&ie=UTF8&iwloc=near&output=embed`} 
+                    className="w-[130%] h-[130%] -translate-x-[15%] -translate-y-[15%] opacity-50 saturate-[1.2] absolute left-0 top-0 transition-all duration-[3000ms] pointer-events-none" 
+                    frameBorder="0" 
+                    loading="lazy" 
+                />
                 <div className="absolute inset-0 bg-gradient-to-b from-[#020617]/50 via-[#020617]/10 to-[#020617]/90 z-10"></div>
             </div>
 
