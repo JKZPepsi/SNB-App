@@ -4,7 +4,7 @@ import { PlayerDataGrid } from '../components/PlayerDataGrid';
 import { calculatePlayerRankings, getGlobalHistory, attachDiffsAndForm } from '../utils/helpers';
 import { COUNTRIES } from '../utils/constants';
 
-export function DashboardView({ playersRaw, tournaments, onSelectPlayer, players }) {
+export function DashboardView({ playersRaw, tournaments, onSelectPlayer, players , isAdmin}) {
     const [asOfId, setAsOfId] = useState('');
     const [filterCountry, setFilterCountry] = useState('All');
 

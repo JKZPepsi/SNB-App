@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate, useParams } from 'react-router-dom';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, onSnapshot, doc, addDoc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInAnonymously, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 
 // --- 1. Import Navigation & UI ---
 import { Sidebar, MobileNav } from './components/Navigation';
@@ -19,7 +19,7 @@ import { TournamentsView, CreateTournamentView, TournamentBracket, SNBInternatio
 import { calculatePlayerRankings, getGlobalHistory } from './utils/helpers';
 
 // --- 4. The Bridge ---
-window.fb = { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, collection, onSnapshot, doc, addDoc, updateDoc, deleteDoc, query, orderBy };
+window.fb = { initializeApp, getAuth, signInAnonymously, signInWithEmailAndPassword, onAuthStateChanged, signOut, getFirestore, collection, onSnapshot, doc, addDoc, updateDoc, deleteDoc, query, orderBy };
 
 const firebaseConfig = {
     apiKey: "AIzaSyDHfnWgaeNG2-lZBSmPpa8JdZgUHNPMh4w",
@@ -31,10 +31,8 @@ const firebaseConfig = {
 };
 const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'pro-rank-global';
 
-// --- URL SLUG GENERATOR ---
 const slugify = (text) => text ? text.toString().toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') : '';
 
-// --- ERROR BOUNDARY (Prevents the White Screen of Death) ---
 class ErrorBoundary extends React.Component {
     constructor(props) { super(props); this.state = { hasError: false, error: null }; }
     static getDerivedStateFromError(error) { return { hasError: true, error }; }
@@ -54,69 +52,86 @@ class ErrorBoundary extends React.Component {
     }
 }
 
-// --- ROUTER WRAPPERS (Translates URLs to Data) ---
-const PlayerProfileWrapper = ({ players, playersRaw, tournaments, db, appId, onNavigate }) => {
+// --- ROUTER WRAPPERS ---
+const PlayerProfileWrapper = ({ players, playersRaw, tournaments, db, appId, onNavigate, isAdmin }) => {
     const { slug } = useParams();
     const player = players.find(p => slugify(p.name) === slug || p.id === slug);
-    
-    // Dynamic Tab Title!
-    useEffect(() => { 
-        document.title = player ? `${player.name} | SNB Tour` : 'SNB Tour'; 
-        return () => document.title = 'SNB Tour'; 
-    }, [player]);
-
+    useEffect(() => { document.title = player ? `${player.name} | SNB Tour` : 'SNB Tour'; return () => document.title = 'SNB Tour'; }, [player]);
     if (!player) return <Navigate to="/players" />;
-    return <PlayerProfile player={player} players={players} playersRaw={playersRaw} onBack={() => onNavigate('players')} tournaments={tournaments} db={db} appId={appId} onNavigate={onNavigate} />;
+    return <PlayerProfile player={player} players={players} playersRaw={playersRaw} onBack={() => onNavigate('players')} tournaments={tournaments} db={db} appId={appId} onNavigate={onNavigate} isAdmin={isAdmin} />;
 };
 
-const NationProfileWrapper = ({ players, playersRaw, tournaments, onNavigate }) => {
+const NationProfileWrapper = ({ players, playersRaw, tournaments, onNavigate, isAdmin }) => {
     const { code } = useParams();
     const cleanCode = code.toUpperCase();
     useEffect(() => { document.title = `${cleanCode} | SNB Nations`; return () => document.title = 'SNB Tour'; }, [cleanCode]);
-    return <NationProfile code={cleanCode} players={players} onBack={() => onNavigate('nations')} onNavigate={onNavigate} playersRaw={playersRaw} tournaments={tournaments} />;
+    return <NationProfile code={cleanCode} players={players} onBack={() => onNavigate('nations')} onNavigate={onNavigate} playersRaw={playersRaw} tournaments={tournaments} isAdmin={isAdmin} />;
 };
 
-const TournamentBracketWrapper = ({ players, tournaments, db, appId, onNavigate }) => {
+const TournamentBracketWrapper = ({ players, tournaments, db, appId, onNavigate, isAdmin }) => {
     const { slug } = useParams();
     const t = tournaments.find(t => slugify(t.name) === slug || t.id === slug);
-    
     useEffect(() => { document.title = t ? `${t.name} | SNB Tour` : 'SNB Tour'; return () => document.title = 'SNB Tour'; }, [t]);
-
     if (!t) return <Navigate to="/tournaments" />;
-    if (t.format === 'nations_league') return <SNBNationsBracket tournament={t} players={players} onBack={() => onNavigate('tournaments')} db={db} appId={appId} allTournaments={tournaments} onNavigate={onNavigate} />;
-    if (t.format === 'atp_finals' || t.format === 'pro_am') return <SNBInternationalsBracket tournament={t} players={players} onBack={() => onNavigate('tournaments')} db={db} appId={appId} allTournaments={tournaments} onNavigate={onNavigate} />;
-    return <TournamentBracket tournament={t} allTournaments={tournaments} players={players} onBack={() => onNavigate('tournaments')} db={db} appId={appId} onNavigate={onNavigate} />;
+    if (t.format === 'nations_league') return <SNBNationsBracket tournament={t} players={players} onBack={() => onNavigate('tournaments')} db={db} appId={appId} allTournaments={tournaments} onNavigate={onNavigate} isAdmin={isAdmin} />;
+    if (t.format === 'atp_finals' || t.format === 'pro_am') return <SNBInternationalsBracket tournament={t} players={players} onBack={() => onNavigate('tournaments')} db={db} appId={appId} allTournaments={tournaments} onNavigate={onNavigate} isAdmin={isAdmin} />;
+    return <TournamentBracket tournament={t} allTournaments={tournaments} players={players} onBack={() => onNavigate('tournaments')} db={db} appId={appId} onNavigate={onNavigate} isAdmin={isAdmin} />;
 };
 
-const EditTournamentWrapper = ({ players, tournaments, db, appId, onNavigate }) => {
+const EditTournamentWrapper = ({ players, tournaments, db, appId, onNavigate, isAdmin }) => {
     const { slug } = useParams();
     const t = tournaments.find(t => slugify(t.name) === slug || t.id === slug);
-    return <CreateTournamentView players={players} onBack={() => onNavigate('tournaments')} onSuccess={tid => onNavigate('tournaments', null, tid)} db={db} appId={appId} editingId={t?.id} tournaments={tournaments} />;
+    return <CreateTournamentView players={players} onBack={() => onNavigate('tournaments')} onSuccess={tid => onNavigate('tournaments', null, tid)} db={db} appId={appId} editingId={t?.id} tournaments={tournaments} isAdmin={isAdmin} />;
 };
 
 export default function App() {
     const [user, setUser] = useState(null);
+    const [isAdmin, setIsAdmin] = useState(false);
     const [db, setDb] = useState(null);
     const [playersRaw, setPlayersRaw] = useState([]);
     const [tournaments, setTournaments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [firebaseError, setFirebaseError] = useState(false);
 
+    // --- MODAL & AUTH STATES ---
+    const [showLoginModal, setShowLoginModal] = useState(false);
+    const [loginEmail, setLoginEmail] = useState('');
+    const [loginPassword, setLoginPassword] = useState('');
+    const [isAuthenticating, setIsAuthenticating] = useState(false); // NEW!
+
     const navigate = useNavigate();
     const location = useLocation();
-
     const activeTab = location.pathname.split('/')[1] || 'dashboard';
 
+    // *** CHANGE THIS TO YOUR ACTUAL ADMIN EMAIL ***
+    const ADMIN_EMAIL = 'jakezerni1@gmail.com'; 
+
     useEffect(() => {
+        try { window.fb.initializeApp(firebaseConfig); } 
+        catch (e) { /* App already exists, totally fine */ }
+        
         try {
-            const fbApp = window.fb.initializeApp(firebaseConfig);
-            const auth = window.fb.getAuth(fbApp);
-            const firestore = window.fb.getFirestore(fbApp);
+            const auth = window.fb.getAuth();
+            const firestore = window.fb.getFirestore();
             setDb(firestore);
-            const initAuth = async () => { await window.fb.signInAnonymously(auth); };
-            initAuth().catch(() => { setFirebaseError(true); setLoading(false); });
-            window.fb.onAuthStateChanged(auth, setUser);
-        } catch (e) { setFirebaseError(true); setLoading(false); }
+            
+            const unsub = window.fb.onAuthStateChanged(auth, (currentUser) => {
+                if (currentUser) {
+                    setUser(currentUser);
+                    // Clean, silent, and case-insensitive check
+                    setIsAdmin(currentUser.email && currentUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase());
+                } else {
+                    setUser(null);
+                    setIsAdmin(false);
+                    window.fb.signInAnonymously(auth).catch(() => setFirebaseError(true));
+                }
+            });
+            return () => unsub();
+        } catch (e) { 
+            console.error("Firebase Auth Error:", e);
+            setFirebaseError(true); 
+            setLoading(false); 
+        }
     }, []);
 
     useEffect(() => {
@@ -137,7 +152,6 @@ export default function App() {
         return () => { unsubP(); unsubT(); };
     }, [user, db]);
 
-    // THE SPEED FIX: We compute the heavy math here ONCE and memorize it.
     const players = useMemo(() => {
         const ranked = calculatePlayerRankings(playersRaw, tournaments);
         let activeIdx = 1;
@@ -145,10 +159,8 @@ export default function App() {
         return ranked;
     }, [playersRaw, tournaments]);
     
-    // The Universal Navigation Router
     const handleNavigate = (tab, playerId = null, tournamentId = null, nationCode = null) => {
         let path = `/${tab}`;
-
         if (tab === 'players' && playerId) {
             const p = players.find(x => x.id === playerId);
             path = `/players/${p ? slugify(p.name) : playerId}`;
@@ -161,13 +173,38 @@ export default function App() {
             const t = tournaments.find(x => x.id === tournamentId);
             path = tournamentId ? `/edit-tournament/${t ? slugify(t.name) : tournamentId}` : `/create-tournament`;
         }
-
         navigate(path);
-        
         setTimeout(() => {
             const scrollArea = document.querySelector('main .custom-scrollbar');
             if (scrollArea) scrollArea.scrollTo({ top: 0, behavior: 'instant' });
         }, 10);
+    };
+
+    // --- EMAIL/PASSWORD LOGIN LOGIC ---
+    const handleLoginSubmit = async (e) => {
+        e.preventDefault();
+        setIsAuthenticating(true); // Disable button & show "Verifying..."
+        
+        try {
+            const auth = window.fb.getAuth();
+            await window.fb.signInWithEmailAndPassword(auth, loginEmail, loginPassword);
+            
+            setShowLoginModal(false);
+            setLoginEmail('');
+            setLoginPassword('');
+        } catch (error) { 
+            console.error("Login failed:", error);
+            alert("Invalid Email or Password."); // Keep this one just in case you type it wrong!
+        } finally {
+            setIsAuthenticating(false); // Re-enable button when done
+        }
+    };
+
+    const handleAdminLogout = async () => {
+        try {
+            const auth = window.fb.getAuth();
+            await window.fb.signOut(auth);
+        } catch (error) { console.error("Logout failed:", error); }
     };
 
     if (loading) return (
@@ -189,32 +226,84 @@ export default function App() {
     );
 
     return (
-        <div className="h-screen w-full bg-[#050505] text-white flex font-sans overflow-hidden">
-            <Sidebar activeTab={activeTab} navigateTo={handleNavigate} />
+        <div className="h-screen w-full bg-[#050505] text-white flex font-sans overflow-hidden relative">
+            <Sidebar activeTab={activeTab} navigateTo={handleNavigate} isAdmin={isAdmin} />
             <main className="flex-1 flex flex-col overflow-hidden relative">
-                <MobileNav activeTab={activeTab} navigateTo={handleNavigate} />
+                <MobileNav activeTab={activeTab} navigateTo={handleNavigate} isAdmin={isAdmin} />
                 <div className="flex-1 overflow-auto p-4 md:p-8 custom-scrollbar bg-transparent">
                     <ErrorBoundary>
                         <Routes>
                             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                            <Route path="/dashboard" element={<DashboardView playersRaw={playersRaw} tournaments={tournaments} onSelectPlayer={(id) => handleNavigate('players', id)} players={players} />} />
-                            <Route path="/analytics" element={<AnalyticsView playersRaw={playersRaw} tournaments={tournaments} players={players} onNavigate={handleNavigate} />} />
                             
-                            <Route path="/nations" element={<NationsView players={players} playersRaw={playersRaw} tournaments={tournaments} onNavigate={handleNavigate} />} />
-                            <Route path="/nations/:code" element={<NationProfileWrapper players={players} playersRaw={playersRaw} tournaments={tournaments} onNavigate={handleNavigate} />} />
+                            <Route path="/dashboard" element={<DashboardView playersRaw={playersRaw} tournaments={tournaments} onSelectPlayer={(id) => handleNavigate('players', id)} players={players} isAdmin={isAdmin} />} />
+                            <Route path="/analytics" element={<AnalyticsView playersRaw={playersRaw} tournaments={tournaments} players={players} onNavigate={handleNavigate} isAdmin={isAdmin} />} />
                             
-                            <Route path="/players" element={<PlayersView players={players} onSelectPlayer={(id) => handleNavigate('players', id)} db={db} appId={appId} />} />
-                            <Route path="/players/:slug" element={<PlayerProfileWrapper players={players} playersRaw={playersRaw} tournaments={tournaments} db={db} appId={appId} onNavigate={handleNavigate} />} />
+                            <Route path="/nations" element={<NationsView players={players} playersRaw={playersRaw} tournaments={tournaments} onNavigate={handleNavigate} isAdmin={isAdmin} />} />
+                            <Route path="/nations/:code" element={<NationProfileWrapper players={players} playersRaw={playersRaw} tournaments={tournaments} onNavigate={handleNavigate} isAdmin={isAdmin} />} />
                             
-                            <Route path="/tournaments" element={<TournamentsView tournaments={tournaments} onSelect={(id) => handleNavigate('tournaments', null, id)} onCreate={() => handleNavigate('create_tournament')} onEdit={(id) => handleNavigate('create_tournament', null, id)} />} />
-                            <Route path="/tournaments/:slug" element={<TournamentBracketWrapper players={players} tournaments={tournaments} db={db} appId={appId} onNavigate={handleNavigate} />} />
+                            <Route path="/players" element={<PlayersView players={players} onSelectPlayer={(id) => handleNavigate('players', id)} db={db} appId={appId} isAdmin={isAdmin} />} />
+                            <Route path="/players/:slug" element={<PlayerProfileWrapper players={players} playersRaw={playersRaw} tournaments={tournaments} db={db} appId={appId} onNavigate={handleNavigate} isAdmin={isAdmin} />} />
                             
-                            <Route path="/create-tournament" element={<CreateTournamentView players={players} onBack={() => handleNavigate('tournaments')} onSuccess={id => handleNavigate('tournaments', null, id)} db={db} appId={appId} tournaments={tournaments} />} />
-                            <Route path="/edit-tournament/:slug" element={<EditTournamentWrapper players={players} tournaments={tournaments} db={db} appId={appId} onNavigate={handleNavigate} />} />
+                            <Route path="/tournaments" element={<TournamentsView tournaments={tournaments} onSelect={(id) => handleNavigate('tournaments', null, id)} onCreate={() => handleNavigate('create_tournament')} onEdit={(id) => handleNavigate('create_tournament', null, id)} isAdmin={isAdmin} />} />
+                            <Route path="/tournaments/:slug" element={<TournamentBracketWrapper players={players} tournaments={tournaments} db={db} appId={appId} onNavigate={handleNavigate} isAdmin={isAdmin} />} />
+                            
+                            <Route path="/create-tournament" element={<CreateTournamentView players={players} onBack={() => handleNavigate('tournaments')} onSuccess={id => handleNavigate('tournaments', null, id)} db={db} appId={appId} tournaments={tournaments} isAdmin={isAdmin} />} />
+                            <Route path="/edit-tournament/:slug" element={<EditTournamentWrapper players={players} tournaments={tournaments} db={db} appId={appId} onNavigate={handleNavigate} isAdmin={isAdmin} />} />
                         </Routes>
                     </ErrorBoundary>
                 </div>
             </main>
+
+            {/* ADMIN LOGIN BUTTON */}
+            <div className="fixed bottom-4 left-4 md:left-6 z-[9999]">
+                {isAdmin ? (
+                    <button onClick={handleAdminLogout} className="bg-white/5 text-white/40 hover:text-rose-400 hover:bg-rose-500/10 border border-white/5 hover:border-rose-500/30 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all backdrop-blur-md shadow-lg">
+                        Logout Admin
+                    </button>
+                ) : (
+                    <button onClick={() => setShowLoginModal(true)} className="bg-black/40 text-white/20 hover:text-white/60 border border-white/5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all backdrop-blur-md">
+                        Admin
+                    </button>
+                )}
+            </div>
+
+            {/* THE LOGIN MODAL */}
+            {showLoginModal && (
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowLoginModal(false)}></div>
+                    <form onSubmit={handleLoginSubmit} className="bg-[#0a0a0a] border border-white/10 p-8 rounded-3xl w-full max-w-sm relative z-10 shadow-[0_30px_60px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in-95 duration-200">
+                        <h2 className="text-2xl font-black text-white mb-6 text-center tracking-tight">Admin Access</h2>
+                        <div className="space-y-4 mb-8">
+                            <input 
+                                type="email" 
+                                placeholder="Email" 
+                                required
+                                value={loginEmail}
+                                onChange={(e) => setLoginEmail(e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-gold-500/50 shadow-inner"
+                            />
+                            <input 
+                                type="password" 
+                                placeholder="Password" 
+                                required
+                                value={loginPassword}
+                                onChange={(e) => setLoginPassword(e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-gold-500/50 shadow-inner"
+                            />
+                        </div>
+                        <div className="flex gap-3">
+                            <button type="button" onClick={() => setShowLoginModal(false)} className="flex-1 text-white/50 hover:text-white transition-colors font-bold text-sm">Cancel</button>
+                            <button 
+                                type="submit" 
+                                disabled={isAuthenticating}
+                                className="flex-1 bg-gold-500 hover:bg-gold-400 text-black py-3 rounded-xl font-black transition-colors shadow-[0_0_15px_rgba(212,175,55,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isAuthenticating ? 'Verifying...' : 'Login'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
         </div>
     );
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search, Plus, X, TournamentsIcon, Settings, ArrowLeft, Trophy, Shuffle, NationsIcon, DynamicTrophy, History, UserCircle, CheckCircle, Shield } from '../components/Icons';
 import { GlassDropdown, GlassTabs, CountrySelect, PlayerMedia, TierBadge } from '../components/SharedUI';
-import { getFlag, getCountryName, getTournamentTier, getDrawSize, getSeedText, generateKnockoutDraw, generateATPFinalsDraw, generateProAmDraw, generateNationsDraw, calcGroupStandings } from '../utils/helpers';
+import { getFlag, getCountryName, getTournamentTier, getDrawSize, getSeedText, generateKnockoutDraw, generateATPFinalsDraw, generateProAmDraw, generateNationsDraw, calcGroupStandings, generateQualifyingDraw } from '../utils/helpers';
 import { TOURNAMENT_TIERS, ROUND_NAMES } from '../utils/constants';
 
 export function ResolveMatchModal({ resolvingMatch, setResolvingMatch, submitResult, handleRandomize, players, allTournaments = [], tournament, tierConf, onNavigate }) {
@@ -86,7 +86,11 @@ export function ResolveMatchModal({ resolvingMatch, setResolvingMatch, submitRes
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none -z-10"></div>
 
                                     {imgs[iIdx] ? (
-                                        <PlayerMedia url={imgs[iIdx]} className="w-full h-full object-cover" />
+                                        <>
+                                            <PlayerMedia url={imgs[iIdx]} className="w-full h-full object-cover" />
+                                            {/* THE INVISIBLE SHIELD: Blocks the iframe from stealing mouse events so you can click the arrows! */}
+                                            <div className="absolute inset-0 z-10"></div>
+                                        </>
                                     ) : (
                                         <span className="text-white/40 font-bold text-xl relative z-10">TBD</span>
                                     )}
@@ -258,27 +262,38 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
     const tierConf = TOURNAMENT_TIERS[tier];
     
     const allowedSizes = useMemo(() => {
+        if (tier === 'grand_slam') return [128];
+        if (tier === 'pro_am') return [32];
+        if (tier === 'challenger_elite') return [16, 32];
         if (tier === 'finals') return [8];
-        if (tier === 'pro_am') return [16]; 
-        if (tier === 'grand_slam') return [64, 128];
-        if (tier === 'major') return [32, 64, 128];
-        if (tier === 'pro') return [16, 32, 64, 128];
         if (tier === 'nations_league') return [16];
-        return [8, 16, 32, 64, 128]; 
+        if (tier === 'major') return [64, 128];
+        if (tier === 'challenger') return [8, 16, 32, 64, 128];
+        if (tier === 'pro') return [16, 32, 64, 128];
+        
+        return [16, 32, 64, 128]; 
     }, [tier]);
+
+    // Force Qualifiers ONLY for Grand Slams (Removes the manual toggle)
+    const useQualifiers = tier === 'grand_slam';
 
     useEffect(() => { 
         if (!editingId && !allowedSizes.includes(size)) setSize(allowedSizes[0]);
         if (!editingId) { setSelectedWildcards([]); setWithdrawnIds([]); setErrorMsg(''); }
     }, [tier, allowedSizes, size, editingId]);
 
-    let sizeMultiplier = 1;
+    let sizeMultiplier = 1.0;
+    // Grand Slams and Finals are exempt from scaling!
     if (tier !== 'finals' && tier !== 'grand_slam') {
-        if (size === 16) sizeMultiplier = 0.75;
-        if (size === 8) sizeMultiplier = 0.5;
+        if (size === 8) sizeMultiplier = 0.6;           
+        else if (size === 16) sizeMultiplier = 0.8;    
+        else if (size === 32) sizeMultiplier = 1.0;     
+        else if (size === 64) sizeMultiplier = 1.2;    
+        else if (size === 128) sizeMultiplier = 1.4;    
     }
-    const expectedWinnerPoints = Math.round(tierConf.points.WINNER * sizeMultiplier);
     
+    const expectedWinnerPoints = Math.round(tierConf.points.WINNER * sizeMultiplier);
+        
     const activePlayers = players.filter(p => !p.retired);
 
     const eligiblePlayers = [...activePlayers]
@@ -286,9 +301,14 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
         .sort((a, b) => a.rank - b.rank);
     
     const reqWc = tierConf.wcCount[size] || 0;
-    const reqAuto = size - reqWc;
+
+    const reqQ = useQualifiers ? 16 : 0;
+    const reqAuto = size - reqWc - reqQ;
+    
     const autoQualifiers = eligiblePlayers.slice(0, reqAuto);
-    const remainingPlayers = eligiblePlayers.slice(reqAuto);
+    const remainingPlayers = eligiblePlayers.slice(reqAuto); // WC and Q players come from here!
+    
+    // Safety check ensuring we have enough players for the main draw
     const hasEnoughPlayers = activePlayers.length >= size + tierConf.excludeTop;
 
     const withdrawnPlayers = [...activePlayers]
@@ -354,18 +374,42 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
                     extraData = { teams: nationsData.teams };
                     selectedPlayerIds = teams.flatMap(t => t.players);
                 } else {
-                    if (autoQualifiers.length + selectedWildcards.length !== size) { setErrorMsg(`You must exactly select ${size} total participants (${reqWc} wildcards required).`); setIsGenerating(false); return; }
-                    const selected = [...autoQualifiers, ...remainingPlayers.filter(p => selectedWildcards.includes(p.id))].sort((a,b) => a.rank - b.rank);
-                    selectedPlayerIds = selected.map(p => p.id);
+                    if (autoQualifiers.length + selectedWildcards.length + reqQ !== size) { setErrorMsg(`You must exactly select ${size} total participants.`); setIsGenerating(false); return; }
+                    
+                    const selectedMain = [...autoQualifiers, ...remainingPlayers.filter(p => selectedWildcards.includes(p.id))].sort((a,b) => a.rank - b.rank);
+                    selectedPlayerIds = selectedMain.map(p => p.id);
+                    
+                    // 1. Create dummy "TBD" slots for the Qualifiers in the Main Draw
+                    const paddedMain = [...selectedMain];
+                    for(let i=0; i<reqQ; i++) {
+                        paddedMain.push({ id: `Q_SLOT_${i}`, isQualifier: true, rank: 'Q' });
+                    }
                     
                     if (tier === 'finals') {
-                        const finalsData = generateATPFinalsDraw(selected);
+                        const finalsData = generateATPFinalsDraw(paddedMain);
                         bracket = finalsData.knockout; format = finalsData.format; groupMatches = finalsData.groupMatches; groups = finalsData.groups;
-                    } else if (tier === 'pro_am') {
-                        const proAmData = generateProAmDraw(selected);
-                        bracket = proAmData.knockout; format = proAmData.format; groupMatches = proAmData.groupMatches; groups = proAmData.groups;
+                    } else if (tier === 'pro_am' || tier === 'challenger_elite') {
+                        const proAmData = generateProAmDraw(paddedMain);
+                        
+                        // FOOLPROOF EXTRACTION: Grab the bracket whether it's named 'knockout' or 'bracket'
+                        const rawBracket = proAmData.knockout || proAmData.bracket || [];
+                        const rawGroups = proAmData.groupMatches || [];
+                        
+                        // Ensure they are strictly strings before Firebase sees them!
+                        bracket = typeof rawBracket === 'string' ? rawBracket : JSON.stringify(rawBracket);
+                        groupMatches = typeof rawGroups === 'string' ? rawGroups : JSON.stringify(rawGroups);
+                        
+                        format = proAmData.format; 
+                        groups = proAmData.groups;
                     } else {
-                        bracket = JSON.stringify(generateKnockoutDraw(selected, size));
+                        bracket = JSON.stringify(generateKnockoutDraw(paddedMain, size));
+                    }
+
+                    // 2. Generate the separate Qualifying Bracket if toggled!
+                    if (useQualifiers) {
+                        const qPlayers = remainingPlayers.filter(p => !selectedWildcards.includes(p.id));
+                        extraData.hasQualifiers = true;
+                        extraData.bracket_q = JSON.stringify(generateQualifyingDraw(qPlayers, 16));
                     }
                 }
 
@@ -477,6 +521,7 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
 
                         <div>
                             <label className="block text-[10px] font-black text-white/50 uppercase tracking-widest mb-3">Draw Size</label>
+
                             <div className="flex items-center bg-black/40 border border-white/10 rounded-full p-1 w-fit backdrop-blur-md">
                                 {[8, 16, 32, 64, 128].map(s => {
                                     const isAllowed = allowedSizes.includes(s);
@@ -508,7 +553,8 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
                         <ul className="space-y-1.5 list-disc pl-4 text-xs font-medium text-white/70">
                             <li>Champion receives <strong className="text-white">{expectedWinnerPoints.toLocaleString()} points</strong>.</li>
                             <li>{tierConf.excludeTop > 0 ? `Top ${tierConf.excludeTop} globally ranked players are excluded from entry.` : (tier === 'finals' ? 'Exclusive Round Robin format for the Top 8 globally ranked players.' : 'Open Entry. Selection strictly based on global rank.')}</li>
-                            {reqWc > 0 && <li>Draw automatically reserves <strong className="text-gold-400">{reqWc} Wildcard slots</strong> for lower-ranked entrants.</li>}
+                            {tier === 'grand_slam' && <li><strong className="text-indigo-400">16 slots</strong> are automatically reserved for the Qualifying Bracket.</li>}
+                            {reqWc > 0 && <li>Draw reserves <strong className="text-gold-400">{reqWc} Wildcard/Participant slots</strong> for manual entry.</li>}
                         </ul>
                     </div>
 
@@ -819,12 +865,14 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
     );
 }
 
-export function TournamentBracket({ tournament, allTournaments = [], players, onBack, db, appId, onNavigate }) {
+export function TournamentBracket({ tournament, allTournaments = [], players, onBack, db, appId, onNavigate , isAdmin }) {
     const [viewMode, setViewMode] = useState(tournament.status === 'completed' ? 'info' : 'bracket');
     const [resolvingMatch, setResolvingMatch] = useState(null);
     const [activeTab, setActiveTab] = useState('all');
     const scrollContainerRef = useRef(null);
+    const [masterView, setMasterView] = useState('main'); 
 
+    // --- SETTINGS STATES ---
     const [showSettings, setShowSettings] = useState(false);
     const [editName, setEditName] = useState('');
     const [editLocation, setEditLocation] = useState('');
@@ -833,34 +881,30 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
     const [showDelete, setShowDelete] = useState(false);
     const [expandedDesc, setExpandedDesc] = useState(false);
 
-    useEffect(() => {
-        if (tournament && showSettings) {
-            setEditName(tournament.name || '');
-            setEditLocation(tournament.location || '');
-            setEditCountry(tournament.hostCountry || '');
-            setEditDesc(tournament.description || '');
-            setShowDelete(false);
-        }
-    }, [tournament, showSettings]);
-
     const getPlayer = (id) => players.find(p => p.id === id) || { name: 'TBD', rank: '-', nationality: 'UNK' };
     
-    let parsedBracket = [];
-    try { parsedBracket = typeof tournament.bracket === 'string' ? JSON.parse(tournament.bracket) : tournament.bracket; } catch(e){}
-    if (!Array.isArray(parsedBracket)) parsedBracket = [];
+    let parsedMain = [];
+    try { parsedMain = typeof tournament.bracket === 'string' ? JSON.parse(tournament.bracket) : tournament.bracket; } catch(e){}
+    if (!Array.isArray(parsedMain)) parsedMain = [];
 
-    const totalRounds = parsedBracket.length;
-    const drawSize = parsedBracket[0]?.length * 2 || 32;
+    let parsedQ = [];
+    if (tournament.hasQualifiers) {
+        try { parsedQ = typeof tournament.bracket_q === 'string' ? JSON.parse(tournament.bracket_q) : tournament.bracket_q; } catch(e){}
+    }
+
+    const activeBracket = masterView === 'main' ? parsedMain : parsedQ;
+    const totalRounds = activeBracket.length;
+    const drawSize = activeBracket[0]?.length * 2 || 32;
     const rOffset = 6 - totalRounds; 
     
-    const rawTier = getTournamentTier(tournament);
+    const rawTier = tournament.tier || getTournamentTier(tournament);
     const tierConf = TOURNAMENT_TIERS[rawTier] || { name: String(rawTier).replace('_', ' '), hex: '#94a3b8', bg: 'bg-slate-500/20', color: 'text-slate-300' };
 
     const tStats = { total: 0, close: 0, dom: 0, luck: 0 };
     let champion = null, finalist = null, semi1 = null, semi2 = null;
 
-    if (parsedBracket.length > 0) {
-        parsedBracket.flat().forEach(m => {
+    if (activeBracket.length > 0) {
+        activeBracket.flat().forEach(m => {
             if (m && m.winner && m.type !== 'bye') {
                 tStats.total++;
                 if (m.type === 'close') tStats.close++;
@@ -870,12 +914,12 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
         });
 
         const fIdx = totalRounds - 1; const sfIdx = totalRounds - 2;
-        if (fIdx >= 0 && parsedBracket[fIdx] && parsedBracket[fIdx][0]) {
-            const fMatch = parsedBracket[fIdx][0];
+        if (fIdx >= 0 && activeBracket[fIdx] && activeBracket[fIdx][0]) {
+            const fMatch = activeBracket[fIdx][0];
             if (fMatch.winner) { champion = fMatch.winner; finalist = fMatch.p1 === fMatch.winner ? fMatch.p2 : fMatch.p1; }
         }
-        if (sfIdx >= 0 && parsedBracket[sfIdx] && parsedBracket[sfIdx].length >= 2) {
-            const s1 = parsedBracket[sfIdx][0]; const s2 = parsedBracket[sfIdx][1];
+        if (sfIdx >= 0 && activeBracket[sfIdx] && activeBracket[sfIdx].length >= 2) {
+            const s1 = activeBracket[sfIdx][0]; const s2 = activeBracket[sfIdx][1];
             if (s1 && s1.winner) semi1 = s1.p1 === s1.winner ? s1.p2 : s1.p1;
             if (s2 && s2.winner) semi2 = s2.p1 === s2.winner ? s2.p2 : s2.p1;
         }
@@ -885,6 +929,9 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
     const IconClose = () => <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>;
 
     const tabs = useMemo(() => {
+        // FIX: Force a single, clean tab if we are viewing Qualifiers!
+        if (masterView === 'qualifiers') return [{ id: 'all', label: 'Full Qualifying Draw' }];
+        
         if (drawSize <= 16) return [{ id: 'all', label: 'Full Draw' }];
         const navTabs = [{ id: 'all', label: 'Full Draw' }];
         if (drawSize === 128) {
@@ -899,7 +946,7 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
         else if (drawSize === 64) navTabs.push({ id: 'q1', label: 'Quarter 1' }, { id: 'q2', label: 'Quarter 2' }, { id: 'q3', label: 'Quarter 3' }, { id: 'q4', label: 'Quarter 4' }, { id: 'final8', label: 'Final 8' });
         else if (drawSize === 32) navTabs.push({ id: 'top', label: 'Top Half' }, { id: 'bottom', label: 'Bottom Half' }, { id: 'final8', label: 'Final 8' });
         return navTabs;
-    }, [drawSize]);
+    }, [drawSize, masterView]);
 
     useEffect(() => { if (!tabs.find(t => t.id === activeTab)) setActiveTab(tabs[0].id); }, [tabs, activeTab]);
 
@@ -932,21 +979,42 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
 
     const handleMatchClick = (rIdx, mIdx, match) => { 
         if (tournament.status === 'completed' || !match || !match.p1 || !match.p2 || match.winner || match.type === 'bye') return; 
-        setResolvingMatch({ roundIndex: rIdx, matchIndex: mIdx, ...match }); 
+        setResolvingMatch({ roundIndex: rIdx, matchIndex: mIdx, ...match, bracketType: masterView }); 
     };
 
     const submitResult = async (winnerId, type) => {
-        const newBracket = JSON.parse(JSON.stringify(parsedBracket));
+        const bType = resolvingMatch.bracketType || 'main';
+        let mainB = JSON.parse(JSON.stringify(parsedMain));
+        let qB = JSON.parse(JSON.stringify(parsedQ));
+        let targetB = bType === 'main' ? mainB : qB;
+
         const { roundIndex: rIdx, matchIndex: mIdx } = resolvingMatch;
-        newBracket[rIdx][mIdx].winner = winnerId; newBracket[rIdx][mIdx].type = type;
-        if (rIdx < totalRounds - 1) { 
+        targetB[rIdx][mIdx].winner = winnerId; 
+        targetB[rIdx][mIdx].type = type;
+
+        if (rIdx < targetB.length - 1) { 
             const nRIdx = rIdx + 1; const nMIdx = Math.floor(mIdx / 2); 
-            if (mIdx % 2 === 0) newBracket[nRIdx][nMIdx].p1 = winnerId; else newBracket[nRIdx][nMIdx].p2 = winnerId; 
+            if (mIdx % 2 === 0) targetB[nRIdx][nMIdx].p1 = winnerId; else targetB[nRIdx][nMIdx].p2 = winnerId; 
+        } else if (bType === 'qualifiers') {
+            // MAGIC: Q-Bracket Final Round Won! Inject into Main Draw.
+            for (let i = 0; i < mainB[0].length; i++) {
+                if (mainB[0][i].p1 && String(mainB[0][i].p1).startsWith('Q_SLOT_')) { mainB[0][i].p1 = winnerId; break; }
+                if (mainB[0][i].p2 && String(mainB[0][i].p2).startsWith('Q_SLOT_')) { mainB[0][i].p2 = winnerId; break; }
+            }
         }
+
         const tRef = window.fb.doc(db, 'artifacts', appId, 'public', 'data', 'tournaments', tournament.id);
-        let newStatus = tournament.status; let completedAt = tournament.completedAt;
-        if (rIdx === totalRounds - 1) { newStatus = 'completed'; completedAt = Date.now(); }
-        await window.fb.updateDoc(tRef, { bracket: JSON.stringify(newBracket), status: newStatus, completedAt: completedAt || null });
+        let updates = {};
+        
+        if (bType === 'main') {
+            updates.bracket = JSON.stringify(mainB);
+            if (rIdx === mainB.length - 1) { updates.status = 'completed'; updates.completedAt = Date.now(); }
+        } else {
+            updates.bracket_q = JSON.stringify(qB);
+            updates.bracket = JSON.stringify(mainB); // Save the newly injected player!
+        }
+
+        await window.fb.updateDoc(tRef, updates);
         setResolvingMatch(null);
     };
 
@@ -973,17 +1041,26 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
         try { onBack(); await window.fb.deleteDoc(window.fb.doc(db, 'artifacts', appId, 'public', 'data', 'tournaments', tournament.id)); } catch(e) { console.error(e); }
     };
 
-    const renderMatchParticipant = (match, pId, isTop) => {
+    const renderMatchParticipant = (match, pId, isTop, rIdx) => {
         const p = getPlayer(pId);
-        const isBye = match.type === 'bye'; const isTBD = pId == null;
-        const isWinner = !isTBD && match.winner === pId && !isBye; const isLoser = !isTBD && match.winner != null && match.winner !== pId && !isBye;
+        const isBye = match.type === 'bye'; 
+        const isTBD = pId == null || String(pId).startsWith('Q_SLOT');
+        const isWinner = !isTBD && match.winner === pId && !isBye;
+        const isLoser = !isTBD && match.winner != null && match.winner !== pId && !isBye;
+        
         return (
             <div className={`relative px-2.5 py-1.5 flex items-center justify-between transition-colors h-[30px] ${isTop ? 'border-b border-white/[0.05]' : ''} ${isWinner ? 'bg-white/[0.08]' : 'bg-transparent'}`}>
                 {isWinner && <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-r shadow-[0_0_8px_rgba(255,255,255,0.8)]" style={{ backgroundColor: tierConf.hex }}></div>}
+                
                 <div className={`flex items-center gap-2 overflow-hidden w-full pr-2 transition-all duration-300 ${isLoser ? 'opacity-30 grayscale' : ''}`}>
-                    {isTBD ? ( <><div className="w-4 h-4 rounded-full border border-white/10 bg-white/5 shrink-0 flex items-center justify-center"></div><span className="text-[9px] font-bold text-white/30 tracking-widest uppercase">TBD</span></> ) : (
+                    {/* NEW: Clean display for BYE slots */}
+                    {isTBD && isBye ? (
+                        <span className="text-[10px] font-black text-white/20 tracking-widest uppercase ml-6">N/A</span>
+                    ) : isTBD ? (
+                        <><div className="w-4 h-4 rounded-full border border-white/10 bg-white/5 shrink-0 flex items-center justify-center"></div><span className="text-[9px] font-bold text-white/30 tracking-widest uppercase">TBD</span></>
+                    ) : (
                         <>
-                            <img src={p.images?.[0] || p.imageUrl || "https://via.placeholder.com/40"} loading="lazy" decoding="async" className={`w-4 h-4 rounded-full object-cover shrink-0 shadow-sm border ${isWinner ? 'border-white/40' : 'border-white/10'}`} />
+                            <img referrerPolicy="no-referrer" src={p.images?.[0] || p.imageUrl || "https://via.placeholder.com/40"} loading="lazy" decoding="async" className={`w-4 h-4 rounded-full object-cover shrink-0 shadow-sm border ${isWinner ? 'border-white/40' : 'border-white/10'}`} />
                             <div className="flex flex-col min-w-0 justify-center">
                                 <span onClick={tournament.status === 'completed' ? (e) => { e.stopPropagation(); onNavigate('players', pId); } : undefined} className={`text-[11px] flex items-center truncate ${isWinner ? 'text-white font-black drop-shadow-md' : 'text-white/70 font-bold'} ${tournament.status === 'completed' ? 'hover:underline cursor-pointer hover:text-gold-400' : ''}`}>
                                     <span className="text-xs drop-shadow-sm">{getFlag(p.nationality)}</span><span className="text-[8px] uppercase tracking-widest text-white/50 font-bold ml-1">{p.nationality}</span><span className="ml-1.5 truncate tracking-wide">{p.name}</span>
@@ -993,7 +1070,21 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
                         </>
                     )}
                 </div>
-                {isWinner && <span className="text-[8px] font-black text-black ml-1 px-1.5 py-0.5 rounded-sm shrink-0 shadow-[0_0_10px_rgba(255,255,255,0.2)] flex items-center gap-1" style={{ backgroundColor: tierConf.hex }}>{match.type === 'random' ? <><Shuffle size={8} strokeWidth={3}/> LUCK</> : match.type === 'lopsided' ? <><IconDom/> DOM</> : <><IconClose/> CLS</>}</span>}
+                {isWinner && (
+                    <div className="flex items-center gap-1 ml-1 shrink-0">
+                        {/* THE GREEN 'Q' BADGE (Side-by-side with result) */}
+                        {masterView === 'qualifiers' && rIdx === totalRounds - 1 && (
+                            <span className="text-[8px] font-black text-emerald-950 bg-emerald-400 px-1.5 py-0.5 rounded-sm shadow-[0_0_10px_rgba(52,211,153,0.4)] flex items-center">
+                                Q
+                            </span>
+                        )}
+                        {/* THE STANDARD RESULT BADGE */}
+                        <span className="text-[8px] font-black text-black px-1.5 py-0.5 rounded-sm shadow-[0_0_10px_rgba(255,255,255,0.2)] flex items-center gap-1" style={{ backgroundColor: tierConf.hex }}>
+                            {match.type === 'random' ? <><Shuffle size={8} strokeWidth={3}/> LUCK</> : match.type === 'lopsided' ? <><IconDom/> DOM</> : <><IconClose/> CLS</>}
+                        </span>
+                    </div>
+                )}
+                {/* Clean up the BYE display */}
                 {isBye && <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest shrink-0 mr-1">BYE</span>}
             </div>
         );
@@ -1024,7 +1115,7 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
     };
 
     const mapQuery = tournament.location || `${tournament.name} ${getCountryName(tournament.hostCountry)}`;
-    const finalMatch = parsedBracket[totalRounds - 1] ? parsedBracket[totalRounds - 1][0] : null;
+    const finalMatch = activeBracket[totalRounds - 1] ? activeBracket[totalRounds - 1][0] : null;
     const showHeaderTrophy = !!finalMatch;
 
     return (
@@ -1069,9 +1160,11 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
                 </div>
 
                 <div className="shrink-0 mt-4 md:mt-0">
-                    <button onClick={() => setShowSettings(true)} className="w-12 h-12 flex items-center justify-center text-white/60 hover:text-white bg-white/5 hover:bg-white/20 backdrop-blur-xl rounded-2xl border border-white/10 transition-all hover:scale-105 shadow-sm group">
-                        <Settings size={22} className="group-hover:rotate-90 transition-transform duration-500" />
-                    </button>
+                    {isAdmin && (
+                        <button onClick={() => setShowSettings(true)} className="w-12 h-12 flex items-center justify-center text-white/60 hover:text-white bg-white/5 hover:bg-white/20 backdrop-blur-xl rounded-2xl border border-white/10 transition-all hover:scale-105 shadow-sm group">
+                            <Settings size={22} className="group-hover:rotate-90 transition-transform duration-500" />
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -1172,42 +1265,56 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
                     </div>
                 </div>
             ) : (
-                <>
-                    {tabs.length > 1 && (
-                        <div className="mb-6 relative z-20 px-4 xl:px-0 animate-in fade-in">
-                            <GlassTabs tabs={tabs} activeTab={activeTab} onChange={handleTabChange} activeColor={tierConf.hex} />
+                <div className="relative w-full flex-1 flex flex-col">
+                    {/* COMBINED HORIZONTAL NAVIGATION BAR */}
+                    <div className="flex flex-col md:flex-row justify-between items-center mb-6 relative z-20 px-4 xl:px-0 gap-4">
+                        {/* Child Tabs (Left Side) */}
+                        <div className="flex-1 w-full overflow-x-auto custom-scrollbar pb-2 md:pb-0">
+                            {tabs.length > 1 && (
+                                <GlassTabs tabs={tabs} activeTab={activeTab} onChange={handleTabChange} activeColor={masterView === 'qualifiers' ? '#6366f1' : tierConf.hex} />
+                            )}
                         </div>
-                    )}
+
+                        {/* Master Toggle (Right Side) */}
+                        {tournament.hasQualifiers && (
+                            <div className="shrink-0 bg-black/40 backdrop-blur-xl p-1.5 rounded-2xl border border-white/10 flex gap-1 shadow-lg ml-auto">
+                                <button onClick={() => { setMasterView('main'); setActiveTab('all'); }} className={`px-5 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${masterView === 'main' ? 'bg-white text-black shadow-md' : 'text-white/40 hover:text-white hover:bg-white/5'}`}>Main Draw</button>
+                                <button onClick={() => { setMasterView('qualifiers'); setActiveTab('all'); }} className={`px-5 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 ${masterView === 'qualifiers' ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.4)]' : 'text-indigo-400/50 hover:text-indigo-300 hover:bg-indigo-500/10'}`}>Qualifiers</button>
+                            </div>
+                        )}
+                    </div>
 
                     <div className="flex-1 bg-white/5 backdrop-blur-2xl rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.6)] relative overflow-hidden border border-white/10 flex flex-col z-20 mx-4 xl:mx-0 animate-in fade-in zoom-in-95 duration-300">
                         <div className="flex-1 overflow-auto custom-scrollbar relative z-10 flex flex-col" ref={scrollContainerRef}>
                             
                             <div className="flex min-w-max sticky top-0 z-40 bg-black/50 backdrop-blur-3xl border-b border-white/10 py-3 px-8 shadow-xl">
-                                {parsedBracket.map((round, rIdx) => {
+                                {activeBracket.map((round, rIdx) => {
                                     if (!round.some((_, mIdx) => shouldShowMatch(activeTab, rIdx, mIdx, round.length))) return null;
                                     const isFinalRound = rIdx === totalRounds - 1;
-                                    const showHeaderTrophy = isFinalRound && round[0];
-
-                                    return (
-                                        <div key={`header-${rIdx}`} className="w-56 shrink-0 mr-12 text-center flex flex-col items-center justify-end min-h-[40px]">
-                                            {showHeaderTrophy && <DynamicTrophy tier={rawTier} result="Winner" country={tournament.hostCountry} size={40} className="mb-2 drop-shadow-2xl" />}
-                                            <div className="flex items-center justify-center gap-2 text-white font-black uppercase tracking-widest text-[11px] drop-shadow-md" style={{ color: isFinalRound ? tierConf.hex : undefined }}>
-                                                {isFinalRound && !showHeaderTrophy && <Trophy className="w-4 h-4 inline-block opacity-90 drop-shadow-md" style={{ color: tierConf.hex }} />}
-                                                {ROUND_NAMES[rIdx + rOffset] || (totalRounds - rIdx === 7 ? 'Round of 128' : `Round ${rIdx + 1}`)}
+                                    
+                                    const roundName = rIdx === 2 ? 'Final' : (rIdx === 1 ? 'Semifinals' : 'Quarterfinals');
+                                        const showHeaderTrophy = isFinalRound && round[0] && tournament.format === 'atp_finals';
+                                        
+                                        return (
+                                            <div key={`header-${rIdx}`} className="w-56 shrink-0 mr-12 text-center flex flex-col items-center justify-end min-h-[40px]">
+                                                {showHeaderTrophy && <DynamicTrophy tier="finals" result="Winner" country={tournament.hostCountry} size={40} className="mb-2 drop-shadow-2xl opacity-90" />}
+                                                <div className="flex items-center justify-center gap-2 text-white font-black uppercase tracking-widest text-[11px] drop-shadow-md" style={{ color: isFinalRound ? tierConf.hex : undefined }}>
+                                                    {isFinalRound && !showHeaderTrophy && <Trophy className="w-3 h-3 inline-block opacity-90 drop-shadow-md" style={{ color: tierConf.hex }} />}
+                                                    {roundName}
+                                                </div>
                                             </div>
-                                        </div>
-                                    )
+                                        );
                                 })}
                             </div>
 
                             <div className="flex min-w-max items-stretch relative z-10 px-8 pb-10 pt-6 flex-1 h-max">
-                                {parsedBracket.map((round, rIdx) => {
+                                {activeBracket.map((round, rIdx) => {
                                     if (!round.some((_, mIdx) => shouldShowMatch(activeTab, rIdx, mIdx, round.length))) return null;
                                     
                                     const hasNextRoundVisible = (() => {
                                         if (rIdx === totalRounds - 1) return false; 
                                         if (activeTab.startsWith('q') && rIdx === totalRounds - 3) return false; 
-                                        if (activeTab.startsWith('s') && rIdx === totalRounds - 4) return false; // Cut lines after Sec 1-8
+                                        if (activeTab.startsWith('s') && rIdx === totalRounds - 4) return false; 
                                         if ((activeTab === 'top' || activeTab === 'bottom') && rIdx === totalRounds - 2) return false; 
                                         return true;
                                     })();
@@ -1217,7 +1324,10 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
                                             {round.map((match, mIdx) => {
                                                 if (!shouldShowMatch(activeTab, rIdx, mIdx, round.length)) return null;
                                                 if (!match) return null;
-                                                const isReady = match.p1 && match.p2 && !match.winner && tournament.status !== 'completed' && match.type !== 'bye';
+                                                // Validate that both IDs exist and are NOT empty Q_SLOTs waiting for injection
+                                                const p1Valid = match.p1 && !String(match.p1).startsWith('Q_SLOT');
+                                                const p2Valid = match.p2 && !String(match.p2).startsWith('Q_SLOT');
+                                                const isReady = p1Valid && p2Valid && !match.winner && tournament.status !== 'completed' && match.type !== 'bye';
                                                 const isFirstVisibleRoundInTab = (activeTab === 'top' || activeTab === 'bottom' || activeTab === 'final16' || activeTab === 'final8' || activeTab.startsWith('q') || activeTab.startsWith('s')) 
                                                     ? !shouldShowMatch(activeTab, rIdx - 1, mIdx * 2, round.length * 2) : rIdx === 0;
 
@@ -1232,12 +1342,12 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
                                                                     : 'bg-black/20 border-white/[0.05] opacity-70 backdrop-blur-sm'
                                                              }`}
                                                              style={{ borderColor: isReady ? tierConf.hex : undefined, boxShadow: isReady ? `0 0 20px ${tierConf.hex}40` : undefined }}>
-                                                            {renderMatchParticipant(match, match.p1, true)}
+                                                            {renderMatchParticipant(match, match.p1, true, rIdx)}
                                                             <div className="h-px w-full bg-white/10"></div>
-                                                            {renderMatchParticipant(match, match.p2, false)}
+                                                            {renderMatchParticipant(match, match.p2, false, rIdx)}
                                                         </div>
                                                         
-                                                        {!isFirstVisibleRoundInTab && <div className="absolute -left-[24px] top-1/2 w-[24px] h-[2px] bg-white/30 z-10 shadow-md"></div>}
+                                                        {rIdx > 0 && <div className="absolute -left-[24px] top-1/2 w-[24px] h-[2px] bg-white/30 z-10 shadow-md"></div>}
                                                         {hasNextRoundVisible && <div className="absolute -right-[24px] top-1/2 w-[24px] h-[2px] bg-white/30 z-10 shadow-md"></div>}
                                                         {hasNextRoundVisible && mIdx % 2 === 0 && <div className="absolute -right-[24px] top-1/2 w-[2px] bg-white/30 z-10 shadow-md" style={{ height: '100%' }}></div>}
                                                     </div>
@@ -1249,14 +1359,14 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
                             </div>
                         </div>
                     </div>
-                </>
+                </div>
             )}
             <ResolveMatchModal resolvingMatch={resolvingMatch} setResolvingMatch={setResolvingMatch} submitResult={submitResult} handleRandomize={handleRandomize} players={players} allTournaments={allTournaments} tournament={tournament} tierConf={tierConf} onNavigate={onNavigate} />
         </div>
     );
 }
 
-export function SNBInternationalsBracket({ tournament, allTournaments = [], players, onBack, db, appId, onNavigate }) {
+export function SNBInternationalsBracket({ tournament, allTournaments = [], players, onBack, db, appId, onNavigate, isAdmin }) {
     const [viewMode, setViewMode] = useState(tournament.status === 'completed' ? 'info' : 'bracket');
     const [resolvingMatch, setResolvingMatch] = useState(null);
     const [searchParams, setSearchParams] = useSearchParams(); // <-- ROUTER HOOK 
@@ -1287,8 +1397,16 @@ export function SNBInternationalsBracket({ tournament, allTournaments = [], play
     const standingsB = useMemo(() => calcGroupStandings('B', groupMatches), [groupMatches]);
     const standingsC = useMemo(() => calcGroupStandings('C', groupMatches), [groupMatches]);
     const standingsD = useMemo(() => calcGroupStandings('D', groupMatches), [groupMatches]);
+    
+    // NEW: Groups E-H
+    const standingsE = useMemo(() => calcGroupStandings('E', groupMatches), [groupMatches]);
+    const standingsF = useMemo(() => calcGroupStandings('F', groupMatches), [groupMatches]);
+    const standingsG = useMemo(() => calcGroupStandings('G', groupMatches), [groupMatches]);
+    const standingsH = useMemo(() => calcGroupStandings('H', groupMatches), [groupMatches]);
 
-    const expectedMatches = tournament.format === 'pro_am' ? 24 : 12;
+    // UPDATE Expected Matches: 8 groups * 6 matches = 48 matches total
+    const expectedMatches = tournament.format === 'pro_am' || tournament.format === 'challenger_elite' ? 48 : 12;
+
     const isGroupStageComplete = useMemo(() => { return groupMatches.length === expectedMatches && groupMatches.every(m => m && m.winner); }, [groupMatches, expectedMatches]);
 
     const tStats = { total: 0, close: 0, dom: 0, luck: 0 };
@@ -1354,13 +1472,21 @@ export function SNBInternationalsBracket({ tournament, allTournaments = [], play
             const allGroupsDone = parsedGM.every(m => m && m.winner);
             if (allGroupsDone) {
                 const sA = calcGroupStandings('A', parsedGM); const sB = calcGroupStandings('B', parsedGM);
-                if (tournament.format === 'pro_am') {
+                if (tournament.format === 'pro_am' || tournament.format === 'challenger_elite') {
                     const sC = calcGroupStandings('C', parsedGM); const sD = calcGroupStandings('D', parsedGM);
-                    if(sA.length >= 2 && sB.length >= 2 && sC.length >= 2 && sD.length >= 2) {
+                    const sE = calcGroupStandings('E', parsedGM); const sF = calcGroupStandings('F', parsedGM);
+                    const sG = calcGroupStandings('G', parsedGM); const sH = calcGroupStandings('H', parsedGM);
+                    
+                    if(sA.length >= 2 && sB.length >= 2 && sC.length >= 2 && sD.length >= 2 && sE.length >= 2 && sF.length >= 2 && sG.length >= 2 && sH.length >= 2) {
+                        // Quarterfinals Injection
                         parsedKO[0][0].p1 = sA[0].id; parsedKO[0][0].p2 = sB[1].id;
                         parsedKO[0][1].p1 = sC[0].id; parsedKO[0][1].p2 = sD[1].id;
-                        parsedKO[0][2].p1 = sB[0].id; parsedKO[0][2].p2 = sA[1].id;
-                        parsedKO[0][3].p1 = sD[0].id; parsedKO[0][3].p2 = sC[1].id;
+                        parsedKO[0][2].p1 = sE[0].id; parsedKO[0][2].p2 = sF[1].id;
+                        parsedKO[0][3].p1 = sG[0].id; parsedKO[0][3].p2 = sH[1].id;
+                        parsedKO[0][4].p1 = sB[0].id; parsedKO[0][4].p2 = sA[1].id;
+                        parsedKO[0][5].p1 = sD[0].id; parsedKO[0][5].p2 = sC[1].id;
+                        parsedKO[0][6].p1 = sF[0].id; parsedKO[0][6].p2 = sE[1].id;
+                        parsedKO[0][7].p1 = sH[0].id; parsedKO[0][7].p2 = sG[1].id;
                     }
                 } else {
                     if(sA.length >= 2 && sB.length >= 2) {
@@ -1404,15 +1530,20 @@ export function SNBInternationalsBracket({ tournament, allTournaments = [], play
     const IconClose = () => <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>;
 
     const renderMatchParticipant = (match, pId, isTop) => {
-        const p = getPlayer(pId); const isBye = match.type === 'bye'; const isTBD = pId == null;
-        const isWinner = !isTBD && match.winner === pId && !isBye; const isLoser = !isTBD && match.winner != null && match.winner !== pId && !isBye;
+        const p = getPlayer(pId); 
+        const isBye = match.type === 'bye'; 
+        const isTBD = pId == null;
+        const isWinner = !isTBD && match.winner === pId && !isBye; 
+        const isLoser = !isTBD && match.winner != null && match.winner !== pId && !isBye;
+        
         return (
             <div className={`relative px-2.5 py-1.5 flex items-center justify-between transition-colors h-[30px] ${isTop ? 'border-b border-white/[0.05]' : ''} ${isWinner ? 'bg-white/[0.08]' : 'bg-transparent'}`}>
                 {isWinner && <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-r shadow-[0_0_8px_rgba(255,255,255,0.8)]" style={{ backgroundColor: tierConf.hex }}></div>}
                 <div className={`flex items-center gap-2 overflow-hidden w-full pr-2 transition-all duration-300 ${isLoser ? 'opacity-30 grayscale' : ''}`}>
                     {isTBD ? ( <><div className="w-4 h-4 rounded-full border border-white/10 bg-white/5 shrink-0 flex items-center justify-center"></div><span className="text-[9px] font-bold text-white/30 tracking-widest uppercase">TBD</span></> ) : (
                         <>
-                            <img src={p.images?.[0] || p.imageUrl || "https://via.placeholder.com/40"} loading="lazy" decoding="async" className={`w-4 h-4 rounded-full object-cover shrink-0 shadow-sm border ${isWinner ? 'border-white/40' : 'border-white/10'}`} />
+                            {/* HOTLINK FIX KEPT HERE */}
+                            <img referrerPolicy="no-referrer" src={p.images?.[0] || p.imageUrl || "https://via.placeholder.com/40"} loading="lazy" decoding="async" className={`w-4 h-4 rounded-full object-cover shrink-0 shadow-sm border ${isWinner ? 'border-white/40' : 'border-white/10'}`} />
                             <div className="flex flex-col min-w-0 justify-center">
                                 <span onClick={tournament.status === 'completed' ? (e) => { e.stopPropagation(); onNavigate('players', pId); } : undefined} className={`text-[11px] flex items-center truncate ${isWinner ? 'text-white font-black drop-shadow-md' : 'text-white/70 font-bold'} ${tournament.status === 'completed' ? 'hover:underline cursor-pointer hover:text-gold-400' : ''}`}>
                                     <span className="text-xs drop-shadow-sm">{getFlag(p.nationality)}</span><span className="text-[8px] uppercase tracking-widest text-white/50 font-bold ml-1">{p.nationality}</span><span className="ml-1.5 truncate tracking-wide">{p.name}</span>
@@ -1422,7 +1553,13 @@ export function SNBInternationalsBracket({ tournament, allTournaments = [], play
                         </>
                     )}
                 </div>
-                {isWinner && <span className="text-[8px] font-black text-black ml-1 px-1.5 py-0.5 rounded-sm shrink-0 shadow-[0_0_10px_rgba(255,255,255,0.2)] flex items-center gap-1" style={{ backgroundColor: tierConf.hex }}>{match.type === 'random' ? <><Shuffle size={8} strokeWidth={3}/> LUCK</> : match.type === 'lopsided' ? <><IconDom/> DOM</> : <><IconClose/> CLS</>}</span>}
+                {isWinner && (
+                    <div className="flex items-center gap-1 ml-1 shrink-0">
+                        <span className="text-[8px] font-black text-black px-1.5 py-0.5 rounded-sm shadow-[0_0_10px_rgba(255,255,255,0.2)] flex items-center gap-1" style={{ backgroundColor: tierConf.hex }}>
+                            {match.type === 'random' ? <><Shuffle size={8} strokeWidth={3}/> LUCK</> : match.type === 'lopsided' ? <><IconDom/> DOM</> : <><IconClose/> CLS</>}
+                        </span>
+                    </div>
+                )}
                 {isBye && <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest shrink-0 mr-1">BYE</span>}
             </div>
         );
@@ -1572,9 +1709,11 @@ export function SNBInternationalsBracket({ tournament, allTournaments = [], play
                     </h1>
                 </div>
                 <div className="shrink-0 mt-4 md:mt-0">
-                    <button onClick={() => setShowSettings(true)} className="w-12 h-12 flex items-center justify-center text-white/60 hover:text-white bg-white/5 hover:bg-white/20 backdrop-blur-xl rounded-2xl border border-white/10 transition-all hover:scale-105 shadow-sm group">
-                        <Settings size={22} className="group-hover:rotate-90 transition-transform duration-500" />
-                    </button>
+                    {isAdmin && (
+                        <button onClick={() => setShowSettings(true)} className="w-12 h-12 flex items-center justify-center text-white/60 hover:text-white bg-white/5 hover:bg-white/20 backdrop-blur-xl rounded-2xl border border-white/10 transition-all hover:scale-105 shadow-sm group">
+                            <Settings size={22} className="group-hover:rotate-90 transition-transform duration-500" />
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -1670,28 +1809,28 @@ export function SNBInternationalsBracket({ tournament, allTournaments = [], play
                 <div className="flex-1 flex flex-col relative z-20 animate-in fade-in zoom-in-95 duration-300">
                     
                     {/* --- THE UNIVERSAL DYNAMIC GROUP STAGE LAYOUT --- */}
-                    <div className={`grid md:grid-cols-2 ${tournament.format === 'pro_am' ? 'xl:grid-cols-4' : ''} gap-6 px-4 xl:px-0 mb-6 shrink-0`}>
-                        <div className="flex flex-col gap-6">
-                            {renderStandingsTable('A', standingsA)}
-                            {renderMatchGroup('A')}
-                        </div>
-                        <div className="flex flex-col gap-6">
-                            {renderStandingsTable('B', standingsB)}
-                            {renderMatchGroup('B')}
-                        </div>
-                        {tournament.format === 'pro_am' && (
-                            <>
-                                <div className="flex flex-col gap-6">
-                                    {renderStandingsTable('C', standingsC)}
-                                    {renderMatchGroup('C')}
-                                </div>
-                                <div className="flex flex-col gap-6">
-                                    {renderStandingsTable('D', standingsD)}
-                                    {renderMatchGroup('D')}
-                                </div>
-                            </>
-                        )}
-                    </div>
+                    {(() => {
+                        // Dynamically check which groups actually have matches!
+                        const groupsToRender = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].filter(g => 
+                            groupMatches.some(m => m && m.group === g)
+                        );
+                        
+                        const standingsMap = {
+                            A: standingsA, B: standingsB, C: standingsC, D: standingsD,
+                            E: standingsE, F: standingsF, G: standingsG, H: standingsH
+                        };
+
+                        return (
+                            <div className={`grid md:grid-cols-2 ${groupsToRender.length >= 4 ? 'xl:grid-cols-4' : ''} gap-6 px-4 xl:px-0 mb-6 shrink-0`}>
+                                {groupsToRender.map(g => (
+                                    <div key={g} className="flex flex-col gap-6">
+                                        {renderStandingsTable(g, standingsMap[g])}
+                                        {renderMatchGroup(g)}
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    })()}
 
                     {/* Knockout Stage - WITH FORCED HEIGHT MATHEMATICS */}
                     <div className="flex-1 flex flex-col px-4 xl:px-0">
@@ -1707,7 +1846,12 @@ export function SNBInternationalsBracket({ tournament, allTournaments = [], play
                                     {knockout.map((round, rIdx) => {
                                         if (!Array.isArray(round)) return null;
                                         const isFinalRound = rIdx === totalRounds - 1;
-                                        const roundName = isFinalRound ? 'Championship' : (rIdx === totalRounds - 2 ? 'Semifinals' : 'Quarterfinals');
+                                        
+                                        // DYNAMIC ROUND NAMES (Works for both 16 and 32 player sizes!)
+                                        let roundName = 'Round of 16';
+                                        if (isFinalRound) roundName = 'Final';
+                                        else if (rIdx === totalRounds - 2) roundName = 'Semifinals';
+                                        else if (rIdx === totalRounds - 3) roundName = 'Quarterfinals';
                                         
                                         // ONLY SHOW HEADER TROPHY IF ATP FINALS
                                         const showHeaderTrophy = isFinalRound && round[0] && tournament.format === 'atp_finals';
@@ -1716,7 +1860,7 @@ export function SNBInternationalsBracket({ tournament, allTournaments = [], play
                                             <div key={`header-${rIdx}`} className="w-56 shrink-0 mr-12 text-center flex flex-col items-center justify-end min-h-[40px]">
                                                 {showHeaderTrophy && <DynamicTrophy tier="finals" result="Winner" country={tournament.hostCountry} size={40} className="mb-2 drop-shadow-2xl opacity-90" />}
                                                 <div className="flex items-center justify-center gap-2 text-white font-black uppercase tracking-widest text-[11px] drop-shadow-md" style={{ color: isFinalRound ? tierConf.hex : undefined }}>
-                                                    {isFinalRound && !showHeaderTrophy && <Trophy className="w-4 h-4 inline-block opacity-90 drop-shadow-md" style={{ color: tierConf.hex }} />}
+                                                    {isFinalRound && !showHeaderTrophy && <Trophy className="w-3 h-3 inline-block opacity-90 drop-shadow-md" style={{ color: tierConf.hex }} />}
                                                     {roundName}
                                                 </div>
                                             </div>
@@ -1741,9 +1885,9 @@ export function SNBInternationalsBracket({ tournament, allTournaments = [], play
                                                              className={`relative z-20 rounded-xl transition-all duration-300 overflow-hidden flex flex-col border ${
                                                                  isReady ? 'cursor-pointer hover:scale-105 z-30 bg-white/[0.15] shadow-[0_8px_30px_rgba(0,0,0,0.5)] border-white/40 backdrop-blur-xl' : match.winner ? 'bg-black/50 border-white/10 shadow-md backdrop-blur-md' : 'bg-black/20 border-white/[0.05] opacity-70 backdrop-blur-sm'
                                                              }`} style={{ borderColor: isReady ? tierConf.hex : undefined, boxShadow: isReady ? `0 0 20px ${tierConf.hex}40` : undefined }}>
-                                                            {renderMatchParticipant(match, match.p1, true)}
-                                                            <div className="h-px w-full bg-white/10"></div>
-                                                            {renderMatchParticipant(match, match.p2, false)}
+                                                                {renderMatchParticipant(match, match.p1, true)}
+                                                                <div className="h-px w-full bg-white/10"></div>
+                                                                {renderMatchParticipant(match, match.p2, false)}
                                                         </div>
                                                         
                                                         {rIdx > 0 && <div className="absolute -left-[24px] top-1/2 w-[24px] h-[2px] bg-white/30 z-10 shadow-md"></div>}
@@ -1766,7 +1910,7 @@ export function SNBInternationalsBracket({ tournament, allTournaments = [], play
     );
 }
 
-export function SNBNationsBracket({ tournament, allTournaments = [], players, onBack, db, appId, onNavigate }) {
+export function SNBNationsBracket({ tournament, allTournaments = [], players, onBack, db, appId, onNavigate, isAdmin }) {
     const [viewMode, setViewMode] = useState(tournament.status === 'completed' ? 'info' : 'bracket');
     const [resolvingTie, setResolvingTie] = useState(null); 
     const [localMatches, setLocalMatches] = useState([]); 
@@ -2112,9 +2256,11 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
                     </h1>
                 </div>
                 <div className="shrink-0 mt-4 md:mt-0">
-                    <button onClick={() => setShowSettings(true)} className="w-12 h-12 flex items-center justify-center text-white/60 hover:text-white bg-white/5 hover:bg-white/20 backdrop-blur-xl rounded-2xl border border-white/10 transition-all hover:scale-105 shadow-sm group">
-                        <Settings size={22} className="group-hover:rotate-90 transition-transform duration-500" />
-                    </button>
+                    {isAdmin && (
+                        <button onClick={() => setShowSettings(true)} className="w-12 h-12 flex items-center justify-center text-white/60 hover:text-white bg-white/5 hover:bg-white/20 backdrop-blur-xl rounded-2xl border border-white/10 transition-all hover:scale-105 shadow-sm group">
+                            <Settings size={22} className="group-hover:rotate-90 transition-transform duration-500" />
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -2621,7 +2767,7 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
     );
 }
 
-export function TournamentsView({ tournaments, onSelect, onCreate, onEdit }) {
+export function TournamentsView({ tournaments, onSelect, onCreate, onEdit , isAdmin}) {
     const [search, setSearch] = useState('');
     const [filterTier, setFilterTier] = useState('All');
     
@@ -2668,18 +2814,25 @@ export function TournamentsView({ tournaments, onSelect, onCreate, onEdit }) {
                         <div className="flex-1 md:flex-none min-w-[140px]">
                             <GlassDropdown value={filterTier} onChange={setFilterTier} options={tierOptions} placeholder="All Tiers" />
                         </div>
-                        <button onClick={onCreate} className="flex-1 md:flex-none bg-gold-500/20 hover:bg-gold-500/30 border border-gold-500/30 px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 whitespace-nowrap transition-all duration-300 text-gold-300 font-bold backdrop-blur-md shadow-[0_0_15px_rgba(234,179,8,0.15)] hover:shadow-[0_0_25px_rgba(234,179,8,0.3)]">
-                            <Plus size={20}/> Create Event
-                        </button>
+                        {isAdmin && (
+                            <button onClick={onCreate} className="flex-1 md:flex-none bg-gold-500/20 hover:bg-gold-500/30 border border-gold-500/30 px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 whitespace-nowrap transition-all duration-300 text-gold-300 font-bold backdrop-blur-md shadow-[0_0_15px_rgba(234,179,8,0.15)] hover:shadow-[0_0_25px_rgba(234,179,8,0.3)]">
+                                <Plus size={20}/> Create Event
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredTournaments.map(t => {
-                    const tierKey = getTournamentTier(t);
+                    const tierKey = t.tier || getTournamentTier(t);
                     const tierConf = TOURNAMENT_TIERS[tierKey];
-                    const drawSize = getDrawSize(t);
+                    let activeBracket = [];
+                    try { activeBracket = typeof t.bracket === 'string' ? JSON.parse(t.bracket) : (t.bracket || []); } catch(e){}
+                    let drawSize = 0;
+                    if (tierKey === 'nations_league' || tierKey === 'pro_am' || tierKey === 'challenger_elite') drawSize = 16;
+                    else if (tierKey === 'finals') drawSize = 8;
+                    else drawSize = activeBracket[0]?.length ? activeBracket[0].length * 2 : 0;
                     const isActive = t.status === 'active';
                     
                     return (

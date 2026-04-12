@@ -129,7 +129,23 @@ export const getTournamentPointsAndResult = (playerId, t) => {
                             w++;
                             if (rIdx === totalKO - 1) { wonFinal = true; resultStr = 'Winner'; }
                             if (t.format === 'atp_finals') { if (rIdx === 0) pts += 400; if (rIdx === 1) pts += 500; } 
-                            else if (t.format === 'pro_am') { if (rIdx === 0) pts += 50; if (rIdx === 1) pts += 60; if (rIdx === 2) pts += 150; }
+                            else if (t.format === 'pro_am') { 
+                                // If it's Challenger Elite, use the 0.2 scaling multiplier
+                                if (getTournamentTier(t) === 'challenger_elite') {
+                                    const drawSize = getDrawSize(t);
+                                    let eliteMultiplier = (drawSize === 16) ? 0.8 : 1.0;
+                                    
+                                    // Distribute the 250 (or 200) base points across rounds
+                                    if (rIdx === 0) pts += Math.round(45 * eliteMultiplier); // QF
+                                    if (rIdx === 1) pts += Math.round(90 * eliteMultiplier); // SF
+                                    if (rIdx === 2) pts += Math.round(115 * eliteMultiplier); // Final Win
+                                } else {
+                                    // Keep Pro-Am at its standard fixed points
+                                    if (rIdx === 0) pts += 50; 
+                                    if (rIdx === 1) pts += 60; 
+                                    if (rIdx === 2) pts += 150; 
+                                }
+                            }
                         } else if (m.winner) { l++; }
                     }
                 });
@@ -161,7 +177,28 @@ export const getTournamentPointsAndResult = (playerId, t) => {
         
         if (played && highestRound > -1) {
             const tierKey = getTournamentTier(t); const tierConf = TOURNAMENT_TIERS[tierKey]; const drawSize = getDrawSize(t);
-            let sizeMultiplier = 1; if (tierKey !== 'grand_slam') { if (drawSize === 16) sizeMultiplier = 0.75; if (drawSize === 8) sizeMultiplier = 0.5; }
+            // --- THE NEW PROGRESSIVE MULTIPLIER WITH HISTORICAL PRESERVATION ---
+            let sizeMultiplier = 1.0;
+            const tDate = t.completedAt || t.createdAt || 0;
+            const RULE_CHANGE_TIMESTAMP = 1712707200000; // Unix Timestamp for April 10, 2026
+
+            if (tDate > RULE_CHANGE_TIMESTAMP) {
+                // NEW RULES: The 0.2 Increment System
+                if (tierKey !== 'finals' && tierKey !== 'grand_slam') {
+                    if (drawSize <= 8) sizeMultiplier = 0.6;
+                    else if (drawSize === 16) sizeMultiplier = 0.8;
+                    else if (drawSize === 32) sizeMultiplier = 1.0;
+                    else if (drawSize === 64) sizeMultiplier = 1.2;
+                    else if (drawSize >= 128) sizeMultiplier = 1.4;
+                }
+            } else {
+                // OLD RULES: Keep past tournament points perfectly untouched
+                if (tierKey !== 'grand_slam') { 
+                    if (drawSize === 16) sizeMultiplier = 0.75; 
+                    if (drawSize === 8) sizeMultiplier = 0.5; 
+                }
+            }
+            // -------------------------------------------------------------------
             if (wonFinal) pts = Math.round(tierConf.points.WINNER * sizeMultiplier);
             else if (highestRound === totalRounds - 1) pts = Math.round(tierConf.points.FINALIST * sizeMultiplier);
             else if (highestRound === totalRounds - 2) pts = Math.round(tierConf.points.SF * sizeMultiplier);
@@ -399,33 +436,92 @@ export const generateATPFinalsDraw = (selectedPlayers) => {
     };
 };
 
-export const generateProAmDraw = (selectedPlayers) => {
-    const seeds = selectedPlayers; 
-    const groupA = [seeds[0], seeds[7], seeds[8], seeds[15]];
-    const groupB = [seeds[1], seeds[6], seeds[9], seeds[14]];
-    const groupC = [seeds[2], seeds[5], seeds[10], seeds[13]];
-    const groupD = [seeds[3], seeds[4], seeds[11], seeds[12]];
+export function generateProAmDraw(players) {
+    if (!players || players.length < 16) return { format: 'pro_am', groupMatches: '[]', knockout: '[[], [], []]', groups: {} };
 
-    const makeMatches = (group, name) => [
-        { id: `${name}-1`, p1: group[0].id, p2: group[1].id, winner: null, type: null, group: name },
-        { id: `${name}-2`, p1: group[2].id, p2: group[3].id, winner: null, type: null, group: name },
-        { id: `${name}-3`, p1: group[0].id, p2: group[2].id, winner: null, type: null, group: name },
-        { id: `${name}-4`, p1: group[1].id, p2: group[3].id, winner: null, type: null, group: name },
-        { id: `${name}-5`, p1: group[0].id, p2: group[3].id, winner: null, type: null, group: name },
-        { id: `${name}-6`, p1: group[1].id, p2: group[2].id, winner: null, type: null, group: name },
-    ];
+    const isLarge = players.length >= 32;
+    const numGroups = isLarge ? 8 : 4;
+    const groupNames = isLarge ? ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] : ['A', 'B', 'C', 'D'];
+    
+    // 1. Snake Draft Seeding (Serpentine)
+    const sorted = [...players].sort((a, b) => a.rank - b.rank);
+    const groups = {};
+    groupNames.forEach(g => groups[g] = []);
+    
+    let direction = 1; 
+    let currentGroupIdx = 0;
 
-    return {
-        format: 'pro_am',
-        groups: { A: groupA.map(p=>p.id), B: groupB.map(p=>p.id), C: groupC.map(p=>p.id), D: groupD.map(p=>p.id) },
-        groupMatches: JSON.stringify([ ...makeMatches(groupA, 'A'), ...makeMatches(groupB, 'B'), ...makeMatches(groupC, 'C'), ...makeMatches(groupD, 'D') ]),
-        knockout: JSON.stringify([
-            [{ id: 'qf-1', p1: null, p2: null, winner: null, type: null }, { id: 'qf-2', p1: null, p2: null, winner: null, type: null }, { id: 'qf-3', p1: null, p2: null, winner: null, type: null }, { id: 'qf-4', p1: null, p2: null, winner: null, type: null }],
-            [{ id: 'sf-1', p1: null, p2: null, winner: null, type: null }, { id: 'sf-2', p1: null, p2: null, winner: null, type: null }],
-            [{ id: 'f-1', p1: null, p2: null, winner: null, type: null }]
-        ])
+    for (let i = 0; i < players.length; i++) {
+        groups[groupNames[currentGroupIdx]].push(sorted[i].id);
+        currentGroupIdx += direction;
+        
+        if (currentGroupIdx >= numGroups) {
+            currentGroupIdx = numGroups - 1;
+            direction = -1;
+        } else if (currentGroupIdx < 0) {
+            currentGroupIdx = 0;
+            direction = 1;
+        }
+    }
+
+    // 2. Generate Round Robin Matches
+    const groupMatches = [];
+    const matchups = [[0, 3], [1, 2], [0, 2], [1, 3], [0, 1], [2, 3]]; 
+
+    groupNames.forEach(g => {
+        matchups.forEach((m, idx) => {
+            groupMatches.push({
+                id: `gm_${g}_${idx}`,
+                group: g,
+                name: `Match ${idx + 1}`,
+                p1: groups[g][m[0]],
+                p2: groups[g][m[1]],
+                winner: null,
+                type: null
+            });
+        });
+    });
+
+    // 3. Build Bracket (4 rounds if 32 players, 2 rounds if 16)
+    let knockout = [];
+    if (isLarge) {
+        knockout = [
+            [ // Round of 16 (8 Matches)
+                { id: 'ko_r16_1', p1: null, p2: null, winner: null, type: null }, { id: 'ko_r16_2', p1: null, p2: null, winner: null, type: null },
+                { id: 'ko_r16_3', p1: null, p2: null, winner: null, type: null }, { id: 'ko_r16_4', p1: null, p2: null, winner: null, type: null },
+                { id: 'ko_r16_5', p1: null, p2: null, winner: null, type: null }, { id: 'ko_r16_6', p1: null, p2: null, winner: null, type: null },
+                { id: 'ko_r16_7', p1: null, p2: null, winner: null, type: null }, { id: 'ko_r16_8', p1: null, p2: null, winner: null, type: null }
+            ],
+            [ // Quarterfinals (4 Matches)
+                { id: 'ko_qf_1', p1: null, p2: null, winner: null, type: null }, { id: 'ko_qf_2', p1: null, p2: null, winner: null, type: null },
+                { id: 'ko_qf_3', p1: null, p2: null, winner: null, type: null }, { id: 'ko_qf_4', p1: null, p2: null, winner: null, type: null }
+            ],
+            [ // Semifinals (2 Matches)
+                { id: 'ko_sf_1', p1: null, p2: null, winner: null, type: null }, { id: 'ko_sf_2', p1: null, p2: null, winner: null, type: null }
+            ],
+            [ // Final (1 Match)
+                { id: 'ko_f_1', p1: null, p2: null, winner: null, type: null }
+            ]
+        ];
+    } else {
+        knockout = [
+            [ // Semifinals (2 Matches)
+                { id: 'ko_sf_1', p1: null, p2: null, winner: null, type: null }, { id: 'ko_sf_2', p1: null, p2: null, winner: null, type: null }
+            ],
+            [ // Final (1 Match)
+                { id: 'ko_f_1', p1: null, p2: null, winner: null, type: null }
+            ]
+        ];
+    }
+
+    // Return STRINGIFIED values using the correct 'knockout' key!
+    return { 
+        format: 'pro_am', 
+        groupMatches: JSON.stringify(groupMatches), 
+        knockout: JSON.stringify(knockout), 
+        groups 
     };
-};
+}
 
 export const generateNationsDraw = (teamsList) => {
     const t = teamsList;
@@ -484,17 +580,45 @@ export const generateNationsDraw = (teamsList) => {
 export const calcGroupStandings = (groupId, matches) => {
     const scores = {};
     if (!Array.isArray(matches)) return [];
-    matches.filter(m => m && m.group === groupId).forEach(m => {
+    
+    // Filter matches for this specific group
+    const groupMatches = matches.filter(m => m && m.group === groupId);
+    
+    groupMatches.forEach(m => {
         if (!scores[m.p1]) scores[m.p1] = { id: m.p1, wins: 0, losses: 0, tiebreaker: 0 };
         if (!scores[m.p2]) scores[m.p2] = { id: m.p2, wins: 0, losses: 0, tiebreaker: 0 };
+        
         if (m.winner) {
             const loser = m.winner === m.p1 ? m.p2 : m.p1;
-            scores[m.winner].wins += 1; scores[loser].losses += 1;
-            scores[m.winner].tiebreaker += (m.type === 'lopsided' ? 2 : 1);
-            scores[loser].tiebreaker -= (m.type === 'lopsided' ? 2 : 1);
+            scores[m.winner].wins += 1; 
+            scores[loser].losses += 1;
+            
+            // THE NEW MATH: DOM = 2, CLS = 1, LUCK = 0
+            let tbValue = 0;
+            if (m.type === 'lopsided') tbValue = 2;
+            else if (m.type === 'close' || m.type === null) tbValue = 1; // Default to 1 if missing
+            else if (m.type === 'random') tbValue = 0;
+            
+            scores[m.winner].tiebreaker += tbValue;
+            scores[loser].tiebreaker -= tbValue;
         }
     });
-    return Object.values(scores).sort((a,b) => b.wins - a.wins || b.tiebreaker - a.tiebreaker);
+    
+    return Object.values(scores).sort((a, b) => {
+        // 1. Sort by total Wins
+        if (a.wins !== b.wins) return b.wins - a.wins;
+        
+        // 2. Sort by the new Tiebreaker points
+        if (a.tiebreaker !== b.tiebreaker) return b.tiebreaker - a.tiebreaker;
+        
+        // 3. Head-to-Head Tiebreaker (If wins and TB are perfectly tied)
+        const h2hMatch = groupMatches.find(m => m.winner && ((m.p1 === a.id && m.p2 === b.id) || (m.p1 === b.id && m.p2 === a.id)));
+        if (h2hMatch && h2hMatch.winner) {
+            return h2hMatch.winner === a.id ? -1 : 1;
+        }
+        
+        return 0; // Absolute dead tie
+    });
 };
 
 export const attachDiffsAndForm = (playersList, globalHist) => {
@@ -513,3 +637,78 @@ export const attachDiffsAndForm = (playersList, globalHist) => {
         return { ...p, diff };
     });
 };
+
+export function generateQualifyingDraw(players, targetQualifiers = 16) {
+    const N = players.length;
+    if (N <= targetQualifiers) return [];
+
+    // 1. Find the required bracket size (Power of 2)
+    let S = targetQualifiers * 2; 
+    while (S < N) S *= 2;
+
+    const numByes = S - N;
+    const totalR1Matches = S / 2;
+
+    // 2. Separate into players who get a Bye (top seeds) and those who play Round 1
+    const playersWithByes = players.slice(0, numByes);
+    const playersToPlayR1 = players.slice(numByes);
+
+    const r1 = [];
+    let pWithByeIdx = 0;
+    let pToPlayIdx = 0;
+
+    // 3. Build Round 1 (Perfectly interleaving the Byes so the bracket is balanced)
+    for (let i = 0; i < totalR1Matches; i++) {
+        const expectedByesAtThisPoint = Math.round((i + 1) * (numByes / totalR1Matches));
+        
+        if (pWithByeIdx < expectedByesAtThisPoint) {
+            r1.push({
+                id: `q-r1-m${i}`,
+                p1: playersWithByes[pWithByeIdx].id,
+                p2: null,
+                winner: playersWithByes[pWithByeIdx].id, // Auto-advances!
+                type: 'bye'
+            });
+            pWithByeIdx++;
+        } else {
+            r1.push({
+                id: `q-r1-m${i}`,
+                p1: playersToPlayR1[pToPlayIdx]?.id || null,
+                p2: playersToPlayR1[pToPlayIdx + 1]?.id || null,
+                winner: null,
+                type: null
+            });
+            pToPlayIdx += 2;
+        }
+    }
+
+    // 4. Build the subsequent rounds until we hit the target survivors
+    const rounds = [r1];
+    let currentMatchesCount = totalR1Matches;
+    let currentRound = r1;
+    let roundNum = 2;
+
+    while (currentMatchesCount > targetQualifiers) {
+        const nextRound = [];
+        const nextMatchesCount = currentMatchesCount / 2;
+        
+        for (let i = 0; i < nextMatchesCount; i++) {
+            nextRound.push({ id: `q-r${roundNum}-m${i}`, p1: null, p2: null, winner: null, type: null });
+        }
+        
+        // Push the Bye winners directly into Round 2!
+        for (let i = 0; i < currentMatchesCount; i++) {
+            if (currentRound[i].winner) {
+                const nextMatchIdx = Math.floor(i / 2);
+                if (i % 2 === 0) nextRound[nextMatchIdx].p1 = currentRound[i].winner;
+                else nextRound[nextMatchIdx].p2 = currentRound[i].winner;
+            }
+        }
+        rounds.push(nextRound);
+        currentRound = nextRound;
+        currentMatchesCount = nextMatchesCount;
+        roundNum++;
+    }
+
+    return rounds;
+}

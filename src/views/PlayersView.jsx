@@ -5,7 +5,7 @@ import { IndividualPlayerChart } from '../components/Charts';
 import { getFlag, getCountryName, getTournamentTier, getTournamentPointsAndResult, getGlobalHistory, getSeedText, getOrdinalSuffix } from '../utils/helpers';
 import { TOURNAMENT_TIERS, ROUND_NAMES } from '../utils/constants';
 
-export function PlayerProfile({ player, players, playersRaw, onBack, tournaments, db, appId, onNavigate }) {
+export function PlayerProfile({ player, players, playersRaw, onBack, tournaments, db, appId, onNavigate, isAdmin }) {
     const [isEditing, setIsEditing] = useState(false);
     const [editName, setEditName] = useState('');
     const [editNationality, setEditNationality] = useState('');
@@ -295,9 +295,11 @@ export function PlayerProfile({ player, players, playersRaw, onBack, tournaments
                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
                         </div>
 
-                        <button onClick={() => setIsEditing(true)} className="absolute top-6 right-6 bg-white/5 backdrop-blur-md p-3 rounded-xl border border-white/10 hover:border-gold-500/50 transition-colors z-20 shadow-lg text-white/50 hover:text-gold-400">
-                            <Edit2 size={18} />
-                        </button>
+                        {isAdmin && (
+                            <button onClick={() => setIsEditing(true)} className="absolute top-6 right-6 bg-white/5 backdrop-blur-md p-3 rounded-xl border border-white/10 hover:border-gold-500/50 transition-colors z-20 shadow-lg text-white/50 hover:text-gold-400">
+                                <Edit2 size={18} />
+                            </button>
+                        )}
 
                         <div className="relative z-10 px-8 pt-12 pb-10 flex flex-col items-center text-center">
                             <div className="w-36 h-36 md:w-44 md:h-44 rounded-full overflow-hidden border-[4px] border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.6)] bg-black relative mb-6">
@@ -559,7 +561,7 @@ export function PlayerProfile({ player, players, playersRaw, onBack, tournaments
     );
 }
 
-export function PlayersView({ players, onSelectPlayer, db, appId }) {
+export function PlayersView({ players, onSelectPlayer, db, appId, isAdmin }) {
     const [newPlayerName, setNewPlayerName] = useState('');
     const [newPlayerNationality, setNewPlayerNationality] = useState('');
     const [newPlayerImages, setNewPlayerImages] = useState(['', '', '', '']);
@@ -651,9 +653,11 @@ export function PlayersView({ players, onSelectPlayer, db, appId }) {
                         <button onClick={exportToCSV} className="flex-1 md:flex-none bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 whitespace-nowrap transition-all duration-300 text-white/80 hover:text-white font-medium backdrop-blur-md shadow-sm">
                             <Download size={16}/> Export
                         </button>
-                        <button onClick={() => setShowAddForm(!showAddForm)} className="flex-1 md:flex-none bg-gold-500/20 hover:bg-gold-500/30 border border-gold-500/30 px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 whitespace-nowrap transition-all duration-300 text-gold-300 font-bold backdrop-blur-md shadow-[0_0_15px_rgba(234,179,8,0.15)] hover:shadow-[0_0_25px_rgba(234,179,8,0.3)]">
-                            {showAddForm ? <X size={20}/> : <Plus size={20}/>} {showAddForm ? 'Cancel' : 'Add Player'}
-                        </button>
+                        {isAdmin && (
+                            <button onClick={() => setShowAddForm(!showAddForm)} className="flex-1 md:flex-none bg-gold-500/20 hover:bg-gold-500/30 border border-gold-500/30 px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 whitespace-nowrap transition-all duration-300 text-gold-300 font-bold backdrop-blur-md shadow-[0_0_15px_rgba(234,179,8,0.15)] hover:shadow-[0_0_25px_rgba(234,179,8,0.3)]">
+                                {showAddForm ? <X size={20}/> : <Plus size={20}/>} {showAddForm ? 'Cancel' : 'Add Player'}
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

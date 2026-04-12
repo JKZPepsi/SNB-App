@@ -188,17 +188,20 @@ export function PlayerMedia({ url, className = "", onClick, alt }) {
         return (
             <div className={wrapperClass} onClick={onClick}>
                 {loadingOverlay}
-                <div className="absolute inset-0 z-30 cursor-pointer"></div>
+                {/* BULLETPROOF SHIELD: Blocks YouTube from stealing the mouse! */}
+                <div className="absolute inset-0 z-20 pointer-events-auto"></div>
                 <iframe onLoad={() => setIsLoaded(true)} src={ytEmbedUrl} className="absolute inset-0 w-full h-full border-0 pointer-events-none scale-[1.35] z-10" allow="autoplay; encrypted-media"></iframe>
             </div>
         );
     }
 
-    // 2. TIKTOK
+// 2. TIKTOK
     const ttMatch = typeof url === 'string' ? (url.match(/video\/(\d+)/i) || url.match(/data-video-id="(\d+)"/i)) : null;
     if (ttMatch && ttMatch[1]) {
         const ttId = ttMatch[1];
-        const ttEmbedUrl = `https://www.tiktok.com/embed/v2/${ttId}`;
+        // Appending ?lang=en-US stops the TikTok server from hanging when Firefox strips its tracking cookies
+        const ttEmbedUrl = `https://www.tiktok.com/embed/v2/${ttId}?lang=en-US`;
+        
         return (
             <div className={`relative w-full h-full bg-black overflow-hidden ${className}`}>
                 {loadingOverlay}
@@ -207,8 +210,10 @@ export function PlayerMedia({ url, className = "", onClick, alt }) {
                     src={ttEmbedUrl} 
                     className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-0 z-10" 
                     style={{ width: '100%', height: '100%', minWidth: '325px', minHeight: '575px' }}
+                    // Explicit allow permissions tell Firefox this is a valid media embed, bypassing some strict sandbox rules
+                    allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
                     allowFullScreen
-                    scrolling="no"
+                    title="TikTok Player"
                 ></iframe>
             </div>
         );
