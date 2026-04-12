@@ -5,11 +5,12 @@ import { getFlag, getCountryName } from '../utils/helpers';
 
 export function Tooltip({ children, content }) {
     return (
-        <div className="group/tooltip relative flex justify-center items-center cursor-help isolate">
+        <div className="group/tooltip relative flex justify-center items-center cursor-help hover:z-50">
             {children}
-            <div className="absolute bottom-full mb-3 flex flex-col bg-[#050505] border border-white/20 shadow-[0_20px_40px_rgba(0,0,0,0.8)] rounded-2xl p-4 text-xs z-[100] pointer-events-none min-w-[180px] opacity-0 invisible translate-y-2 group-hover/tooltip:opacity-100 group-hover/tooltip:visible group-hover/tooltip:translate-y-0 transition-all duration-300 ease-out">
+            {/* GLOSSY GLASSMORPHISM: bg-black/40 with intense backdrop-blur-2xl */}
+            <div className="absolute bottom-full mb-3 flex flex-col bg-black/40 backdrop-blur-2xl border border-white/20 shadow-[0_30px_60px_rgba(0,0,0,0.9)] rounded-2xl p-4 text-xs z-[100] pointer-events-none min-w-[180px] opacity-0 invisible translate-y-2 group-hover/tooltip:opacity-100 group-hover/tooltip:visible group-hover/tooltip:translate-y-0 transition-all duration-300 ease-out">
                 {content}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-[6px] border-transparent border-t-[#050505]"></div>
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-[6px] border-transparent border-t-white/20"></div>
             </div>
         </div>
     );
@@ -30,10 +31,11 @@ export function GlassDropdown({ value, onChange, options, placeholder, hasSearch
     const selected = options.find(o => o.value === value);
 
     return (
-        <div ref={wrapperRef} className="relative w-full sm:w-64 z-40">
+        // SMART Z-INDEX: Only high when open!
+        <div ref={wrapperRef} className={`relative w-full sm:w-64 transition-all duration-200 ${isOpen ? 'z-50' : 'z-20'}`}>
             <div 
-                // Removed royal-900, changed to bg-black/40 to match theme. Changed py-2.5 to py-3 to match heights!
-                className="w-full bg-black/40 backdrop-blur-md border border-white/10 rounded-xl px-4 py-3 text-white/90 flex justify-between items-center cursor-pointer hover:bg-white/10 transition-all shadow-inner"
+                // HIGH TRANSPARENCY: bg-white/5 and backdrop-blur-md so you can see numbers behind it
+                className="w-full bg-white/5 backdrop-blur-md border border-white/10 rounded-xl px-4 py-3 text-white/90 flex justify-between items-center cursor-pointer hover:bg-white/10 transition-all shadow-sm"
                 onClick={() => setIsOpen(!isOpen)}
             >
                 <span className="truncate text-sm font-medium tracking-wide">
@@ -374,7 +376,7 @@ export function HistoricalTournamentSelect({ tournaments, value, onChange }) {
     const selectedT = completed.find(t => t.id === value);
 
     return (
-        <div ref={wrapperRef} className="relative w-full sm:w-72">
+        <div ref={wrapperRef} className={`relative w-full sm:w-72 ${isOpen ? 'z-50' : 'z-20'}`}>
             <div 
                 className="w-full bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-2.5 text-white/90 flex justify-between items-center cursor-pointer hover:bg-white/10 transition-colors shadow-sm"
                 onClick={() => setIsOpen(!isOpen)}
@@ -422,7 +424,7 @@ export function DashboardCountryFilter({ value, onChange, playersRaw }) {
     const selected = COUNTRIES.find(c => c.code === value);
 
     return (
-        <div ref={wrapperRef} className="relative w-full sm:w-64">
+        <div ref={wrapperRef} className={`relative w-full sm:w-64 ${isOpen ? 'z-50' : 'z-20'}`}>
             <div 
                 className="w-full bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-2.5 text-white/90 flex justify-between items-center cursor-pointer hover:bg-white/10 transition-colors shadow-sm"
                 onClick={() => setIsOpen(!isOpen)}

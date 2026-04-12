@@ -56,9 +56,9 @@ export function PlayerDataGrid({ players, tournaments, onSelectPlayer, onNavigat
     };
 
     return (
-        <div className="bg-white/5 backdrop-blur-2xl rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.6)] border border-white/10 overflow-hidden">
-            <div className="overflow-x-auto custom-scrollbar">
-                <table className="w-full text-left border-collapse whitespace-nowrap min-w-[900px] table-fixed">
+        <div className="bg-white/5 backdrop-blur-2xl rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.6)] border border-white/10 relative z-30">
+            <div className="overflow-x-auto custom-scrollbar pt-[100px] -mt-[100px] pointer-events-none">                
+                <table className="w-full text-left border-collapse whitespace-nowrap min-w-[900px] table-fixed pointer-events-auto">
                     <thead>
                         <tr className="bg-black/40 text-white/50 text-[10px] font-bold uppercase tracking-widest select-none border-b border-white/10 backdrop-blur-md rounded-t-3xl">
                             <th className="py-4 px-2 w-20 text-center cursor-pointer hover:text-white transition-colors group first:rounded-tl-3xl" onClick={() => handleSort(rankKey)}>
@@ -121,11 +121,12 @@ export function PlayerDataGrid({ players, tournaments, onSelectPlayer, onNavigat
                                 );
                             }
 
-                            const trueGained = (recent?.points || 0) + (player.bonusPoints || 0);
-                            const rawDropped = Math.max(0, trueGained - (player.diff || 0));
+                            const trueGained = player.gainedPoints || 0;
+                            const rawDropped = player.droppedPoints || 0;
 
                             return (
-                                <tr key={player.id} onClick={() => onSelectPlayer(player.id)} className="hover:bg-white/5 transition-all duration-200 cursor-pointer group">
+                                // FIX: Added 'relative hover:z-50' so the active row and its tooltip ALWAYS render on top!
+                                <tr key={player.id} onClick={() => onSelectPlayer(player.id)} className="hover:bg-white/5 transition-all duration-200 cursor-pointer group relative hover:z-50">
                                     
                                     <td className="py-3 px-2 text-center">
                                         <span className="text-2xl font-medium tabular-nums text-white/80 group-hover:text-white transition-colors tracking-tight">{player[rankKey]}</span>

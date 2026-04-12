@@ -108,7 +108,20 @@ export const getTournamentPointsAndResult = (playerId, t) => {
         const groupMatches = getParsed(t, 'groupMatches', []);
         const knockout = getParsed(t, 'bracket', [[],[]]);
         const tierConf = TOURNAMENT_TIERS[getTournamentTier(t)] || TOURNAMENT_TIERS['pro_am'];
-        const rrPts = tierConf.points.RR_WIN || 0;
+        
+        let rrPts = tierConf.points.RR_WIN || 0;
+        let participationPts = 0;
+
+        // FIX: Add dynamic Round Robin points for Pro-Am formats!
+        if (t.format === 'pro_am') {
+            if (getTournamentTier(t) === 'challenger_elite') {
+                rrPts = 15;
+                participationPts = 10;
+            } else {
+                rrPts = 30; // Pro-Am
+                participationPts = 20;
+            }
+        }
         
         groupMatches.forEach(m => {
             if (m && (m.p1 === playerId || m.p2 === playerId)) {
@@ -118,6 +131,8 @@ export const getTournamentPointsAndResult = (playerId, t) => {
         });
 
         if (played) {
+            pts += participationPts; // Awarded just for showing up to the group stage!
+
             const totalKO = knockout.length;
             let highestKO = -1;
             knockout.forEach((round, rIdx) => {
@@ -128,22 +143,24 @@ export const getTournamentPointsAndResult = (playerId, t) => {
                         if (m.winner === playerId) {
                             w++;
                             if (rIdx === totalKO - 1) { wonFinal = true; resultStr = 'Winner'; }
-                            if (t.format === 'atp_finals') { if (rIdx === 0) pts += 400; if (rIdx === 1) pts += 500; } 
+                            
+                            // Award points based on distance from the Final (Works perfectly for 16 AND 32 sizes!)
+                            if (t.format === 'atp_finals') { 
+                                if (rIdx === 0) pts += 400; if (rIdx === 1) pts += 500; 
+                            } 
                             else if (t.format === 'pro_am') { 
-                                // If it's Challenger Elite, use the 0.2 scaling multiplier
+                                const distFromFinal = (totalKO - 1) - rIdx;
                                 if (getTournamentTier(t) === 'challenger_elite') {
-                                    const drawSize = getDrawSize(t);
-                                    let eliteMultiplier = (drawSize === 16) ? 0.8 : 1.0;
-                                    
-                                    // Distribute the 250 (or 200) base points across rounds
-                                    if (rIdx === 0) pts += Math.round(45 * eliteMultiplier); // QF
-                                    if (rIdx === 1) pts += Math.round(90 * eliteMultiplier); // SF
-                                    if (rIdx === 2) pts += Math.round(115 * eliteMultiplier); // Final Win
+                                    const eliteMultiplier = getDrawSize(t) === 16 ? 0.8 : 1.0;
+                                    if (distFromFinal === 3) pts += Math.round(20 * eliteMultiplier); // R16
+                                    if (distFromFinal === 2) pts += Math.round(30 * eliteMultiplier); // QF
+                                    if (distFromFinal === 1) pts += Math.round(60 * eliteMultiplier); // SF
+                                    if (distFromFinal === 0) pts += Math.round(85 * eliteMultiplier); // Final
                                 } else {
-                                    // Keep Pro-Am at its standard fixed points
-                                    if (rIdx === 0) pts += 50; 
-                                    if (rIdx === 1) pts += 60; 
-                                    if (rIdx === 2) pts += 150; 
+                                    if (distFromFinal === 3) pts += 40; // R16
+                                    if (distFromFinal === 2) pts += 50; // QF
+                                    if (distFromFinal === 1) pts += 100; // SF
+                                    if (distFromFinal === 0) pts += 200; // Final
                                 }
                             }
                         } else if (m.winner) { l++; }
@@ -176,29 +193,20 @@ export const getTournamentPointsAndResult = (playerId, t) => {
         });
         
         if (played && highestRound > -1) {
-            const tierKey = getTournamentTier(t); const tierConf = TOURNAMENT_TIERS[tierKey]; const drawSize = getDrawSize(t);
-            // --- THE NEW PROGRESSIVE MULTIPLIER WITH HISTORICAL PRESERVATION ---
+            const tierKey = getTournamentTier(t); 
+            const tierConf = TOURNAMENT_TIERS[tierKey]; 
+            const drawSize = getDrawSize(t);
+            
+            // --- RETROACTIVE PROGRESSIVE MULTIPLIER ---
             let sizeMultiplier = 1.0;
-            const tDate = t.completedAt || t.createdAt || 0;
-            const RULE_CHANGE_TIMESTAMP = 1712707200000; // Unix Timestamp for April 10, 2026
-
-            if (tDate > RULE_CHANGE_TIMESTAMP) {
-                // NEW RULES: The 0.2 Increment System
-                if (tierKey !== 'finals' && tierKey !== 'grand_slam') {
-                    if (drawSize <= 8) sizeMultiplier = 0.6;
-                    else if (drawSize === 16) sizeMultiplier = 0.8;
-                    else if (drawSize === 32) sizeMultiplier = 1.0;
-                    else if (drawSize === 64) sizeMultiplier = 1.2;
-                    else if (drawSize >= 128) sizeMultiplier = 1.4;
-                }
-            } else {
-                // OLD RULES: Keep past tournament points perfectly untouched
-                if (tierKey !== 'grand_slam') { 
-                    if (drawSize === 16) sizeMultiplier = 0.75; 
-                    if (drawSize === 8) sizeMultiplier = 0.5; 
-                }
+            if (tierKey !== 'finals' && tierKey !== 'grand_slam') {
+                if (drawSize <= 8) sizeMultiplier = 0.6;
+                else if (drawSize === 16) sizeMultiplier = 0.8;
+                else if (drawSize === 32) sizeMultiplier = 1.0;
+                else if (drawSize === 64) sizeMultiplier = 1.2;
+                else if (drawSize >= 128) sizeMultiplier = 1.4;
             }
-            // -------------------------------------------------------------------
+
             if (wonFinal) pts = Math.round(tierConf.points.WINNER * sizeMultiplier);
             else if (highestRound === totalRounds - 1) pts = Math.round(tierConf.points.FINALIST * sizeMultiplier);
             else if (highestRound === totalRounds - 2) pts = Math.round(tierConf.points.SF * sizeMultiplier);
@@ -234,24 +242,30 @@ export const calculatePlayerRankings = (players, tournaments) => {
 
         for (const t of completedTournaments) {
             let tMatches = [];
-            if (t.format === 'atp_finals') {
-                const knockout = getParsed(t, 'bracket', []);
-                const groupMatches = getParsed(t, 'groupMatches', []);
-                groupMatches.forEach(m => { if (m && (m.p1 === player.id || m.p2 === player.id) && m.winner) tMatches.push({ isWin: m.winner === player.id, type: m.type || 'close' }); });
-                knockout.forEach(round => { if (!Array.isArray(round)) return; round.forEach(m => { if (m && (m.p1 === player.id || m.p2 === player.id) && m.winner) tMatches.push({ isWin: m.winner === player.id, type: m.type || 'close' }); }); });
-            } else {
-                const parsedBracket = getParsed(t, 'bracket', []);
-                if (parsedBracket && Array.isArray(parsedBracket)) {
-                    parsedBracket.forEach(round => {
-                        if (!Array.isArray(round)) return;
-                        round.forEach(match => {
-                            if (match && (match.p1 === player.id || match.p2 === player.id) && match.winner && match.type !== 'bye') {
-                                tMatches.push({ isWin: match.winner === player.id, type: match.type || 'close' });
-                            }
-                        });
-                    });
-                }
+            
+            // 1. Universally grab Group Matches (Fixes Pro-Am & Elite form!)
+            const groupMatches = getParsed(t, 'groupMatches', []);
+            if (Array.isArray(groupMatches)) {
+                groupMatches.forEach(m => { 
+                    if (m && (m.p1 === player.id || m.p2 === player.id) && m.winner) {
+                        tMatches.push({ isWin: m.winner === player.id, type: m.type || 'close' }); 
+                    } 
+                });
             }
+
+            // 2. Universally grab Knockout Matches
+            const parsedBracket = getParsed(t, 'bracket', []);
+            if (Array.isArray(parsedBracket)) {
+                parsedBracket.forEach(round => {
+                    if (!Array.isArray(round)) return;
+                    round.forEach(match => {
+                        if (match && (match.p1 === player.id || match.p2 === player.id) && match.winner && match.type !== 'bye') {
+                            tMatches.push({ isWin: match.winner === player.id, type: match.type || 'close' });
+                        }
+                    });
+                });
+            }
+            
             tMatches.forEach(m => recentMatches.push(m));
 
             const res = getTournamentPointsAndResult(player.id, t);
@@ -627,6 +641,9 @@ export const attachDiffsAndForm = (playersList, globalHist) => {
 
     return playersList.map(p => {
         let diff = 0;
+        let earnedRecently = 0;
+
+        // 1. Calculate the Net Change (Diff)
         if (prevHist) {
             const prevStanding = prevHist.standings.find(s => s.id === p.id);
             const prevPoints = prevStanding ? prevStanding.pts : 0;
@@ -634,7 +651,26 @@ export const attachDiffsAndForm = (playersList, globalHist) => {
         } else {
             diff = p.points;
         }
-        return { ...p, diff };
+
+        // 2. Find what they ACTUALLY gained since the last ranking release
+        if (prevHist && p.recentTournaments) {
+            const newTournaments = p.recentTournaments.filter(t => t.date > prevHist.date);
+            earnedRecently = newTournaments.reduce((sum, t) => sum + t.points, 0);
+        } else if (!prevHist) {
+            earnedRecently = p.points;
+        }
+
+        // 3. Mathematical Deduction: If Net = Gained - Dropped, then Dropped = Gained - Net!
+        let actualDropped = earnedRecently - diff;
+        if (actualDropped < 0) actualDropped = 0; // Failsafe
+
+        return { 
+            ...p, 
+            diff,
+            // Export the real numbers so the UI popup can use them!
+            gainedPoints: earnedRecently,
+            droppedPoints: actualDropped
+        };
     });
 };
 
