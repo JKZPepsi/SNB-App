@@ -48,9 +48,12 @@ export function PlayerDataGrid({ players, tournaments, onSelectPlayer, onNavigat
             'Semifinalist': 'SF', 'Semifinals': 'SF',
             'Quarterfinalist': 'QF', 'Quarterfinals': 'QF',
             'Round of 16': 'R16',
-            'Round of 32': 'R32', 'Round of 64': 'R64',
+            'Round of 32': 'R32', 
+            'Round of 64': 'R64',
+            'Round of 128': 'R128',
             'Round Robin': 'RR', 'Group Stage': 'RR', 
-            'Third Place': '3rd', 'Fourth Place': '4th'
+            'Third Place': '3rd', 'Fourth Place': '4th',
+            'Qualifier': 'Q', 'Q-R1': 'QR1', 'Q-R2': 'QR2', 'Q-R3': 'QR3', 'Q-R4': 'QR4'
         };
         return map[result] || result || '-';
     };

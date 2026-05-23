@@ -19,15 +19,25 @@ export function ResolveMatchModal({ resolvingMatch, setResolvingMatch, submitRes
     const matchH2H = (() => {
         if (!resolvingMatch || !resolvingMatch.p1 || !resolvingMatch.p2) return { p1Wins: 0, p2Wins: 0, total: 0 };
         let p1Wins = 0, p2Wins = 0, total = 0;
+        
         allTournaments.forEach(t => {
-            let mList = []; let gm = []; try { gm = typeof t.groupMatches === 'string' ? JSON.parse(t.groupMatches) : (t.groupMatches || []); } catch(e){}
+            let mList = []; 
+            
+            // Parse all possible match locations safely
+            let gm = []; try { gm = typeof t.groupMatches === 'string' ? JSON.parse(t.groupMatches) : (t.groupMatches || []); } catch(e){}
             let ko = []; try { ko = typeof t.bracket === 'string' ? JSON.parse(t.bracket) : (t.bracket || []); } catch(e){}
-            if (t.format === 'atp_finals') { if (!Array.isArray(gm)) gm = []; if (!Array.isArray(ko)) ko = []; mList = [...gm, ...(ko.flat())]; } 
-            else { if (Array.isArray(ko)) mList = ko.flat(); }
+            let q = [];  try { q  = typeof t.bracket_q === 'string' ? JSON.parse(t.bracket_q) : (t.bracket_q || []); } catch(e){}
+            
+            // UNIVERSAL SCOOP: Throw every match from this tournament into one giant list!
+            if (Array.isArray(gm)) mList.push(...gm);
+            if (Array.isArray(ko)) mList.push(...ko.flat());
+            if (Array.isArray(q))  mList.push(...q.flat());
             
             mList.forEach(m => {
                 if (m && m.winner && m.type !== 'bye' && ((m.p1 === resolvingMatch.p1 && m.p2 === resolvingMatch.p2) || (m.p1 === resolvingMatch.p2 && m.p2 === resolvingMatch.p1))) {
-                    total++; if (m.winner === resolvingMatch.p1) p1Wins++; else if (m.winner === resolvingMatch.p2) p2Wins++;
+                    total++; 
+                    if (m.winner === resolvingMatch.p1) p1Wins++; 
+                    else if (m.winner === resolvingMatch.p2) p2Wins++;
                 }
             });
         });
@@ -300,10 +310,13 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
         .filter(p => p.rank > tierConf.excludeTop && !withdrawnIds.includes(p.id))
         .sort((a, b) => a.rank - b.rank);
     
-    const reqWc = tierConf.wcCount[size] || 0;
+    let reqWc = tierConf.wcCount?.[size] || 0;
+    if (tier === 'challenger') {
+        reqWc = size; 
+    }
 
     const reqQ = useQualifiers ? 16 : 0;
-    const reqAuto = size - reqWc - reqQ;
+    const reqAuto = Math.max(0, size - reqWc - reqQ);
     
     const autoQualifiers = eligiblePlayers.slice(0, reqAuto);
     const remainingPlayers = eligiblePlayers.slice(reqAuto); // WC and Q players come from here!
@@ -328,9 +341,9 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
         }
     };
     
-    const dropCount = Math.max(1, Math.floor(size / 4));
-    const withdrawTopFraction = () => {
-        const topSeeds = remainingPlayers.slice(0, dropCount).map(p => p.id);
+    const withdrawTopN = (count) => {
+        // Drops the top 'count' players from whatever is currently left in the pool
+        const topSeeds = remainingPlayers.slice(0, count).map(p => p.id);
         setWithdrawnIds(prev => [...new Set([...prev, ...topSeeds])]);
         setSelectedWildcards(prev => prev.filter(id => !topSeeds.includes(id)));
     };
@@ -652,7 +665,12 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
                                                 <h3 className="font-black text-white text-lg tracking-tight drop-shadow-md">{reqAuto === 0 ? 'Participants' : (reqWc === 0 ? 'Alternates' : 'Wildcards')}</h3>
                                                 <div className="flex gap-2 items-center flex-wrap justify-end">
                                                     {reqAuto === 0 && remainingPlayers.length > 0 && (
-                                                        <button onClick={withdrawTopFraction} className="text-[9px] uppercase tracking-wider font-bold bg-white/10 text-white/70 hover:bg-[#be123c]/30 hover:text-white px-2.5 py-1.5 rounded-lg transition-colors border border-white/10 hover:border-[#be123c]/50 backdrop-blur-md">Drop Top {dropCount} Seeds</button>
+                                                        <>
+                                                            {remainingPlayers.length > 10 && (
+                                                                <button onClick={() => withdrawTopN(10)} className="text-[9px] uppercase tracking-wider font-bold bg-white/10 text-white/70 hover:bg-[#be123c]/30 hover:text-white px-2.5 py-1.5 rounded-lg transition-colors border border-white/10 hover:border-[#be123c]/50 backdrop-blur-md">Drop Top 10</button>
+                                                            )}
+                                                            <button onClick={() => withdrawTopN(Math.max(1, Math.floor(remainingPlayers.length / 2)))} className="text-[9px] uppercase tracking-wider font-black bg-[#be123c]/20 text-[#fb7185] hover:bg-[#be123c] hover:text-white px-2.5 py-1.5 rounded-lg transition-colors border border-[#be123c]/40 backdrop-blur-md shadow-sm">Drop Top Half</button>
+                                                        </>
                                                     )}
                                                     {selectedWildcards.length < reqWc && reqWc > 0 && (
                                                         <button onClick={selectRandomWildcards} className="text-[10px] flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg transition-colors border border-white/20 font-bold shadow-sm backdrop-blur-md">
@@ -1469,31 +1487,55 @@ export function SNBInternationalsBracket({ tournament, allTournaments = [], play
 
         if (matchType === 'group') {
             parsedGM[matchIndex].winner = winnerId; parsedGM[matchIndex].type = winType;
-            const allGroupsDone = parsedGM.every(m => m && m.winner);
-            if (allGroupsDone) {
-                const sA = calcGroupStandings('A', parsedGM); const sB = calcGroupStandings('B', parsedGM);
-                if (tournament.format === 'pro_am' || tournament.format === 'challenger_elite') {
-                    const sC = calcGroupStandings('C', parsedGM); const sD = calcGroupStandings('D', parsedGM);
-                    const sE = calcGroupStandings('E', parsedGM); const sF = calcGroupStandings('F', parsedGM);
-                    const sG = calcGroupStandings('G', parsedGM); const sH = calcGroupStandings('H', parsedGM);
+            
+            // SMART CHECK: Determine exactly which groups are 100% finished
+            const isGroupDone = (groupId) => {
+                const matches = parsedGM.filter(m => m && m.group === groupId);
+                return matches.length > 0 && matches.every(m => m.winner);
+            };
+
+            const sA = calcGroupStandings('A', parsedGM); const aDone = isGroupDone('A');
+            const sB = calcGroupStandings('B', parsedGM); const bDone = isGroupDone('B');
+            const sC = calcGroupStandings('C', parsedGM); const cDone = isGroupDone('C');
+            const sD = calcGroupStandings('D', parsedGM); const dDone = isGroupDone('D');
+
+            if (tournament.format === 'pro_am' || tournament.format === 'challenger_elite') {
+                
+                // BULLETPROOF AUTO-DETECT INJECTION LOGIC
+                if (parsedKO[0]?.length === 8) {
+                    // 32-Player Draw -> Round of 16 Starts
+                    const sE = calcGroupStandings('E', parsedGM); const eDone = isGroupDone('E');
+                    const sF = calcGroupStandings('F', parsedGM); const fDone = isGroupDone('F');
+                    const sG = calcGroupStandings('G', parsedGM); const gDone = isGroupDone('G');
+                    const sH = calcGroupStandings('H', parsedGM); const hDone = isGroupDone('H');
                     
-                    if(sA.length >= 2 && sB.length >= 2 && sC.length >= 2 && sD.length >= 2 && sE.length >= 2 && sF.length >= 2 && sG.length >= 2 && sH.length >= 2) {
-                        // Quarterfinals Injection
-                        parsedKO[0][0].p1 = sA[0].id; parsedKO[0][0].p2 = sB[1].id;
-                        parsedKO[0][1].p1 = sC[0].id; parsedKO[0][1].p2 = sD[1].id;
-                        parsedKO[0][2].p1 = sE[0].id; parsedKO[0][2].p2 = sF[1].id;
-                        parsedKO[0][3].p1 = sG[0].id; parsedKO[0][3].p2 = sH[1].id;
-                        parsedKO[0][4].p1 = sB[0].id; parsedKO[0][4].p2 = sA[1].id;
-                        parsedKO[0][5].p1 = sD[0].id; parsedKO[0][5].p2 = sC[1].id;
-                        parsedKO[0][6].p1 = sF[0].id; parsedKO[0][6].p2 = sE[1].id;
-                        parsedKO[0][7].p1 = sH[0].id; parsedKO[0][7].p2 = sG[1].id;
-                    }
-                } else {
-                    if(sA.length >= 2 && sB.length >= 2) {
-                        parsedKO[0][0].p1 = sA[0].id; parsedKO[0][0].p2 = sB[1].id;
-                        parsedKO[0][1].p1 = sB[0].id; parsedKO[0][1].p2 = sA[1].id;
-                    }
+                    if(aDone) { parsedKO[0][0].p1 = sA[0]?.id; parsedKO[0][4].p2 = sA[1]?.id; }
+                    if(bDone) { parsedKO[0][0].p2 = sB[1]?.id; parsedKO[0][4].p1 = sB[0]?.id; }
+                    if(cDone) { parsedKO[0][1].p1 = sC[0]?.id; parsedKO[0][5].p2 = sC[1]?.id; }
+                    if(dDone) { parsedKO[0][1].p2 = sD[1]?.id; parsedKO[0][5].p1 = sD[0]?.id; }
+                    if(eDone) { parsedKO[0][2].p1 = sE[0]?.id; parsedKO[0][6].p2 = sE[1]?.id; }
+                    if(fDone) { parsedKO[0][2].p2 = sF[1]?.id; parsedKO[0][6].p1 = sF[0]?.id; }
+                    if(gDone) { parsedKO[0][3].p1 = sG[0]?.id; parsedKO[0][7].p2 = sG[1]?.id; }
+                    if(hDone) { parsedKO[0][3].p2 = sH[1]?.id; parsedKO[0][7].p1 = sH[0]?.id; }
+                } 
+                else if (parsedKO[0]?.length === 4) {
+                    // NEW 16-Player Draw -> Quarterfinals Starts
+                    if(aDone) { parsedKO[0][0].p1 = sA[0]?.id; parsedKO[0][2].p2 = sA[1]?.id; }
+                    if(bDone) { parsedKO[0][0].p2 = sB[1]?.id; parsedKO[0][2].p1 = sB[0]?.id; }
+                    if(cDone) { parsedKO[0][1].p1 = sC[0]?.id; parsedKO[0][3].p2 = sC[1]?.id; }
+                    if(dDone) { parsedKO[0][1].p2 = sD[1]?.id; parsedKO[0][3].p1 = sD[0]?.id; }
+                } 
+                else if (parsedKO[0]?.length === 2) {
+                    // OLD LEGACY 16-Player Draw -> Semifinals Starts
+                    if(aDone) parsedKO[0][0].p1 = sA[0]?.id;
+                    if(cDone) parsedKO[0][0].p2 = sC[0]?.id;
+                    if(bDone) parsedKO[0][1].p1 = sB[0]?.id;
+                    if(dDone) parsedKO[0][1].p2 = sD[0]?.id;
                 }
+            } else {
+                // ATP Finals (8 Players) -> Semifinals Starts
+                if(aDone) { parsedKO[0][0].p1 = sA[0]?.id; parsedKO[0][1].p2 = sA[1]?.id; }
+                if(bDone) { parsedKO[0][0].p2 = sB[1]?.id; parsedKO[0][1].p1 = sB[0]?.id; }
             }
         } else if (matchType === 'knockout') {
             parsedKO[rIdx][matchIndex].winner = winnerId; parsedKO[rIdx][matchIndex].type = winType;
@@ -1594,55 +1636,63 @@ export function SNBInternationalsBracket({ tournament, allTournaments = [], play
         });
     };
 
-    const renderStandingsTable = (groupName, standings) => (
-        <div className="bg-white/5 backdrop-blur-2xl rounded-3xl border border-white/10 overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.4)] w-full flex flex-col shrink-0">
-            <div className="bg-black/40 px-4 py-2 border-b border-white/10 font-black text-white flex justify-between items-center tracking-wide">
-                <span className="text-base">Group {groupName}</span>
-                {isGroupStageComplete && <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-md uppercase tracking-widest border border-emerald-500/30">Final</span>}
-            </div>
-            <div className="p-2 pb-3">
-                <table className="w-full text-left text-[11px]">
-                    <thead className="text-white/50 text-[8px] uppercase tracking-widest border-b border-white/5">
-                        <tr>
-                            <th className="px-2 py-1.5 font-bold">Player</th>
-                            <th className="px-2 py-1.5 text-center font-bold">W-L</th>
-                            <th className="px-2 py-1.5 text-center font-bold">TB</th>
-                            <th className="px-2 py-1.5 text-center font-bold">Form</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5 text-white font-medium">
-                        {standings.map((s, idx) => {
-                            const p = getPlayer(s.id); const isAdvancing = isGroupStageComplete && idx < 2;
-                            const rawForm = getPlayerGroupForm(s.id, groupMatches);
-                            const paddedForm = [...rawForm, ...Array(Math.max(0, 3 - rawForm.length)).fill(null)].slice(0, 3);
+    const renderStandingsTable = (groupName, standings) => {
+        // NEW: Check if THIS specific group is done, so it highlights instantly!
+        const groupMatchesForThisGroup = groupMatches.filter(m => m && m.group === groupName);
+        const isThisGroupComplete = groupMatchesForThisGroup.length > 0 && groupMatchesForThisGroup.every(m => m.winner);
 
-                            return (
-                                <tr key={s.id} className={`transition-colors ${isAdvancing ? 'bg-emerald-500/10 rounded-lg' : 'hover:bg-white/5'}`}>
-                                    <td className="px-2 py-2 flex items-center gap-1.5">
-                                        <span className={`w-4 h-4 flex items-center justify-center rounded-full text-[8px] font-black shadow-sm shrink-0 ${isAdvancing ? 'bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'bg-white/10 text-white/80 border border-white/10'}`}>{idx+1}</span>
-                                        <span onClick={tournament.status === 'completed' ? (e) => { e.stopPropagation(); onNavigate('players', s.id); } : undefined} className={`truncate flex items-center min-w-0 ${tournament.status === 'completed' ? 'cursor-pointer hover:text-gold-400 hover:underline' : ''}`}>
-                                            <span className="text-sm drop-shadow-sm mr-1.5 shrink-0">{getFlag(p.nationality)}</span>
-                                            <span className="font-bold text-xs truncate tracking-tight">{p.name}</span>
-                                        </span>
-                                    </td>
-                                    <td className="px-2 py-2 text-center font-bold tabular-nums text-xs">{s.wins}-{s.losses}</td>
-                                    <td className={`px-2 py-2 text-center font-bold tabular-nums text-xs ${s.tiebreaker > 0 ? 'text-emerald-400' : s.tiebreaker < 0 ? 'text-rose-400' : 'text-white/40'}`}>{s.tiebreaker > 0 ? `+${s.tiebreaker}` : s.tiebreaker}</td>
-                                    <td className="px-2 py-2">
-                                        <div className="flex items-center justify-center gap-1">
-                                            {paddedForm.map((res, i) => (
-                                                <div key={i} title={res === 'W' ? 'Win' : res === 'L' ? 'Loss' : 'Unplayed'} 
-                                                     className={`w-1.5 h-1.5 rounded-full shadow-inner ${res === 'W' ? 'bg-emerald-500' : res === 'L' ? 'bg-rose-500' : 'bg-white/10'}`} />
-                                            ))}
-                                        </div>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+        return (
+            <div className="bg-white/5 backdrop-blur-2xl rounded-3xl border border-white/10 overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.4)] w-full flex flex-col shrink-0">
+                <div className="bg-black/40 px-4 py-2 border-b border-white/10 font-black text-white flex justify-between items-center tracking-wide">
+                    <span className="text-base">Group {groupName}</span>
+                    {isThisGroupComplete && <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-md uppercase tracking-widest border border-emerald-500/30">Final</span>}
+                </div>
+                <div className="p-2 pb-3">
+                    <table className="w-full text-left text-[11px]">
+                        <thead className="text-white/50 text-[8px] uppercase tracking-widest border-b border-white/5">
+                            <tr>
+                                <th className="px-2 py-1.5 font-bold">Player</th>
+                                <th className="px-2 py-1.5 text-center font-bold">W-L</th>
+                                <th className="px-2 py-1.5 text-center font-bold">TB</th>
+                                <th className="px-2 py-1.5 text-center font-bold">Form</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5 text-white font-medium">
+                            {standings.map((s, idx) => {
+                                const p = getPlayer(s.id); 
+                                const isAdvancing = isThisGroupComplete && idx < 2; // HIGHLIGHTS INSTANTLY
+                                const rawForm = getPlayerGroupForm(s.id, groupMatches);
+                                const paddedForm = [...rawForm, ...Array(Math.max(0, 3 - rawForm.length)).fill(null)].slice(0, 3);
+
+                                return (
+                                    <tr key={s.id} className={`transition-colors ${isAdvancing ? 'bg-emerald-500/10 rounded-lg' : 'hover:bg-white/5'}`}>
+                                        {/* ... [Keep all the exact same <td> data rendering you currently have inside this map] ... */}
+                                        <td className="px-2 py-2 flex items-center gap-1.5">
+                                            <span className={`w-4 h-4 flex items-center justify-center rounded-full text-[8px] font-black shadow-sm shrink-0 ${isAdvancing ? 'bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'bg-white/10 text-white/80 border border-white/10'}`}>{idx+1}</span>
+                                            <span onClick={tournament.status === 'completed' ? (e) => { e.stopPropagation(); onNavigate('players', s.id); } : undefined} className={`truncate flex items-center min-w-0 ${tournament.status === 'completed' ? 'cursor-pointer hover:text-gold-400 hover:underline' : ''}`}>
+                                                <span className="text-sm drop-shadow-sm mr-1.5 shrink-0">{getFlag(p.nationality)}</span>
+                                                <span className="font-bold text-xs truncate tracking-tight">{p.name}</span>
+                                            </span>
+                                        </td>
+                                        <td className="px-2 py-2 text-center font-bold tabular-nums text-xs">{s.wins}-{s.losses}</td>
+                                        <td className={`px-2 py-2 text-center font-bold tabular-nums text-xs ${s.tiebreaker > 0 ? 'text-emerald-400' : s.tiebreaker < 0 ? 'text-rose-400' : 'text-white/40'}`}>{s.tiebreaker > 0 ? `+${s.tiebreaker}` : s.tiebreaker}</td>
+                                        <td className="px-2 py-2">
+                                            <div className="flex items-center justify-center gap-1">
+                                                {paddedForm.map((res, i) => (
+                                                    <div key={i} title={res === 'W' ? 'Win' : res === 'L' ? 'Loss' : 'Unplayed'} 
+                                                         className={`w-1.5 h-1.5 rounded-full shadow-inner ${res === 'W' ? 'bg-emerald-500' : res === 'L' ? 'bg-rose-500' : 'bg-white/10'}`} />
+                                                ))}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     const renderMatchGroup = (groupName) => {
         const matches = groupMatches.filter(m => m && m.group === groupName);
@@ -2096,21 +2146,55 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
         const losingTeamObj = teams.find(t => t.id === (t1w > t2w ? resolvingTie.t2.id : resolvingTie.t1.id));
 
         if (matchType === 'group') {
-            parsedGM[matchIndex].winner = tieWinnerId; parsedGM[matchIndex].score = score; parsedGM[matchIndex].matches = localMatches; parsedGM[matchIndex].type = tieType;
-            const allGroupsDone = parsedGM.every(m => m && m.winner);
-            if (allGroupsDone) {
-                const sA = calcNationStandings('A', parsedGM); 
-                const sB = calcNationStandings('B', parsedGM);
-                const sC = calcNationStandings('C', parsedGM); 
-                const sD = calcNationStandings('D', parsedGM);
-                
-                if(sA.length >= 2 && sB.length >= 2 && sC.length >= 2 && sD.length >= 2) {
-                    parsedKO[0][0].t1 = teams.find(t=>t.id===sA[0].id); parsedKO[0][0].t2 = teams.find(t=>t.id===sB[1].id);
-                    parsedKO[0][1].t1 = teams.find(t=>t.id===sC[0].id); parsedKO[0][1].t2 = teams.find(t=>t.id===sD[1].id);
-                    parsedKO[0][2].t1 = teams.find(t=>t.id===sB[0].id); parsedKO[0][2].t2 = teams.find(t=>t.id===sA[1].id);
-                    parsedKO[0][3].t1 = teams.find(t=>t.id===sD[0].id); parsedKO[0][3].t2 = teams.find(t=>t.id===sC[1].id);
-                    parsedKO[0].forEach(tie => populateTieMatches(tie));
+            parsedGM[matchIndex].winner = winnerId; parsedGM[matchIndex].type = winType;
+            
+            // SMART CHECK: Determine exactly which groups are 100% finished
+            const isGroupDone = (groupId) => {
+                const matches = parsedGM.filter(m => m && m.group === groupId);
+                return matches.length > 0 && matches.every(m => m.winner);
+            };
+
+            const sA = calcGroupStandings('A', parsedGM); const aDone = isGroupDone('A');
+            const sB = calcGroupStandings('B', parsedGM); const bDone = isGroupDone('B');
+            const sC = calcGroupStandings('C', parsedGM); const cDone = isGroupDone('C');
+            const sD = calcGroupStandings('D', parsedGM); const dDone = isGroupDone('D');
+
+            if (tournament.format === 'pro_am' || tournament.format === 'challenger_elite') {
+                const isLargeDraw = parsedKO[0].length >= 8;
+                const isMediumDraw = parsedKO[0].length === 4;
+
+                if (isLargeDraw) {
+                    const sE = calcGroupStandings('E', parsedGM); const eDone = isGroupDone('E');
+                    const sF = calcGroupStandings('F', parsedGM); const fDone = isGroupDone('F');
+                    const sG = calcGroupStandings('G', parsedGM); const gDone = isGroupDone('G');
+                    const sH = calcGroupStandings('H', parsedGM); const hDone = isGroupDone('H');
+                    
+                    // INSTANT INJECTION: Top 2 from 8 Groups -> Round of 16
+                    if(aDone) { parsedKO[0][0].p1 = sA[0].id; parsedKO[0][4].p2 = sA[1].id; }
+                    if(bDone) { parsedKO[0][0].p2 = sB[1].id; parsedKO[0][4].p1 = sB[0].id; }
+                    if(cDone) { parsedKO[0][1].p1 = sC[0].id; parsedKO[0][5].p2 = sC[1].id; }
+                    if(dDone) { parsedKO[0][1].p2 = sD[1].id; parsedKO[0][5].p1 = sD[0].id; }
+                    if(eDone) { parsedKO[0][2].p1 = sE[0].id; parsedKO[0][6].p2 = sE[1].id; }
+                    if(fDone) { parsedKO[0][2].p2 = sF[1].id; parsedKO[0][6].p1 = sF[0].id; }
+                    if(gDone) { parsedKO[0][3].p1 = sG[0].id; parsedKO[0][7].p2 = sG[1].id; }
+                    if(hDone) { parsedKO[0][3].p2 = sH[1].id; parsedKO[0][7].p1 = sH[0].id; }
+                } else if (isMediumDraw) {
+                    // INSTANT INJECTION: Top 2 from 4 Groups -> Quarterfinals
+                    if(aDone) { parsedKO[0][0].p1 = sA[0].id; parsedKO[0][2].p2 = sA[1].id; }
+                    if(bDone) { parsedKO[0][0].p2 = sB[1].id; parsedKO[0][2].p1 = sB[0].id; }
+                    if(cDone) { parsedKO[0][1].p1 = sC[0].id; parsedKO[0][3].p2 = sC[1].id; }
+                    if(dDone) { parsedKO[0][1].p2 = sD[1].id; parsedKO[0][3].p1 = sD[0].id; }
+                } else {
+                    // LEGACY FALLBACK: Prevents old tournaments from crashing!
+                    if(aDone && sA[0]) parsedKO[0][0].p1 = sA[0].id;
+                    if(bDone && sB[0]) parsedKO[0][0].p2 = sB[0].id;
+                    if(cDone && sC[0]) parsedKO[0][1].p1 = sC[0].id;
+                    if(dDone && sD[0]) parsedKO[0][1].p2 = sD[0].id;
                 }
+            } else {
+                // ATP FINALS INSTANT INJECTION
+                if(aDone && sA.length >= 2) { parsedKO[0][0].p1 = sA[0].id; parsedKO[0][1].p2 = sA[1].id; }
+                if(bDone && sB.length >= 2) { parsedKO[0][0].p2 = sB[1].id; parsedKO[0][1].p1 = sB[0].id; }
             }
         } else if (matchType === 'knockout') {
             parsedKO[rIdx][matchIndex].winner = tieWinnerId; parsedKO[rIdx][matchIndex].score = score; parsedKO[rIdx][matchIndex].matches = localMatches; parsedKO[rIdx][matchIndex].type = tieType;

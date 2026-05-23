@@ -129,10 +129,13 @@ export const PlayerFormIndicator = ({ matches }) => {
 export const TierBadge = ({ rawTier, name }) => {
     const t = String(rawTier || 'event').toLowerCase();
     let hex = '#94a3b8'; let label = t.replace(/_/g, ' ');
-    if (t === 'grand_slam' || t === 'finals' || t === 'major') { hex = '#d4af37'; label = name || 'Major'; }
+    
+    if (t === 'grand_slam') { hex = '#a855f7'; label = name || 'Grand Slam'; }
+    else if (t === 'finals' || t === 'major') { hex = '#d4af37'; label = name || 'Major'; }
     else if (t === 'international') { hex = '#38bdf8'; label = name || 'International'; }
     else if (t === 'pro') { hex = '#fb923c'; label = name || 'Pro Series'; }
     else if (t === 'challenger') { hex = '#4ade80'; label = name || 'Challenger'; }
+    else if (t === 'challenger_elite') { hex = '#10b981'; label = name || 'Challenger Elite'; }
     
     return (
         <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg shrink-0 backdrop-blur-md border shadow-sm"

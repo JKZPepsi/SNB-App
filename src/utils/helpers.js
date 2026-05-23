@@ -24,6 +24,7 @@ export const getDrawSize = (t) => {
     if (!bracket || !Array.isArray(bracket) || !bracket.length) return 32;
     
     const firstRoundSize = bracket[0]?.length || 16;
+    if (firstRoundSize === 64) return 128;
     if (firstRoundSize === 32) return 64;
     if (firstRoundSize === 16) return 32;
     if (firstRoundSize === 8) return 16;
@@ -191,13 +192,32 @@ export const getTournamentPointsAndResult = (playerId, t) => {
                 }
             });
         });
+
+        // --- NEW: QUALIFYING ENGINE PARSER ---
+        const qBracket = getParsed(t, 'bracket_q', []);
+        let qPlayed = false;
+        let qHighestRound = -1;
+        let advancedToMain = false;
+        const qTotalRounds = qBracket.length;
+
+        qBracket.forEach((round, rIdx) => {
+            if (!Array.isArray(round)) return;
+            round.forEach(m => {
+                if (m && (m.p1 === playerId || m.p2 === playerId)) {
+                    qPlayed = true;
+                    if (rIdx > qHighestRound) qHighestRound = rIdx;
+                    if (m.winner === playerId && m.type !== 'bye') w++;
+                    else if (m.winner && m.winner !== playerId) l++;
+                    if (m.winner === playerId && rIdx === qTotalRounds - 1) advancedToMain = true;
+                }
+            });
+        });
         
         if (played && highestRound > -1) {
             const tierKey = getTournamentTier(t); 
             const tierConf = TOURNAMENT_TIERS[tierKey]; 
             const drawSize = getDrawSize(t);
             
-            // --- RETROACTIVE PROGRESSIVE MULTIPLIER ---
             let sizeMultiplier = 1.0;
             if (tierKey !== 'finals' && tierKey !== 'grand_slam') {
                 if (drawSize <= 8) sizeMultiplier = 0.6;
@@ -207,14 +227,32 @@ export const getTournamentPointsAndResult = (playerId, t) => {
                 else if (drawSize >= 128) sizeMultiplier = 1.4;
             }
 
+            // DYNAMIC ROUND NAMING (Perfectly supports 128 players without array offsets!)
+            const distFromFinal = totalRounds - 1 - highestRound;
+
             if (wonFinal) pts = Math.round(tierConf.points.WINNER * sizeMultiplier);
-            else if (highestRound === totalRounds - 1) pts = Math.round(tierConf.points.FINALIST * sizeMultiplier);
-            else if (highestRound === totalRounds - 2) pts = Math.round(tierConf.points.SF * sizeMultiplier);
-            else if (highestRound === totalRounds - 3) pts = Math.round(tierConf.points.QF * sizeMultiplier);
-            else if (highestRound === totalRounds - 4) pts = Math.round(tierConf.points.R16 * sizeMultiplier);
-            else if (highestRound === totalRounds - 5) pts = Math.round(tierConf.points.R32 * sizeMultiplier);
-            else if (highestRound === totalRounds - 6) pts = Math.round(tierConf.points.R64 * sizeMultiplier);
-            const rOffset = 6 - totalRounds; resultStr = wonFinal ? 'Winner' : ROUND_NAMES[highestRound + rOffset];
+            else if (distFromFinal === 0) pts = Math.round(tierConf.points.FINALIST * sizeMultiplier);
+            else if (distFromFinal === 1) pts = Math.round(tierConf.points.SF * sizeMultiplier);
+            else if (distFromFinal === 2) pts = Math.round(tierConf.points.QF * sizeMultiplier);
+            else if (distFromFinal === 3) pts = Math.round(tierConf.points.R16 * sizeMultiplier);
+            else if (distFromFinal === 4) pts = Math.round(tierConf.points.R32 * sizeMultiplier);
+            else if (distFromFinal === 5) pts = Math.round(tierConf.points.R64 * sizeMultiplier);
+            else if (distFromFinal === 6) pts = Math.round((tierConf.points.R128 || 10) * sizeMultiplier);
+
+            if (wonFinal) resultStr = 'Winner';
+            else if (distFromFinal === 0) resultStr = 'Finalist';
+            else if (distFromFinal === 1) resultStr = 'Semifinals';
+            else if (distFromFinal === 2) resultStr = 'Quarterfinals';
+            else if (distFromFinal === 3) resultStr = 'Round of 16';
+            else if (distFromFinal === 4) resultStr = 'Round of 32';
+            else if (distFromFinal === 5) resultStr = 'Round of 64';
+            else if (distFromFinal === 6) resultStr = 'Round of 128';
+            
+        } else if (qPlayed) {
+            // THEY ONLY PLAYED QUALIFIERS
+            played = true; 
+            pts = (qHighestRound + 1) * 8; // Base points for qualifying rounds
+            resultStr = advancedToMain ? 'Qualifier' : `Q-R${qHighestRound + 1}`;
         }
     }
     
@@ -266,6 +304,18 @@ export const calculatePlayerRankings = (players, tournaments) => {
                 });
             }
             
+            const qBracket = getParsed(t, 'bracket_q', []);
+            if (Array.isArray(qBracket)) {
+                qBracket.forEach(round => {
+                    if (!Array.isArray(round)) return;
+                    round.forEach(match => {
+                        if (match && (match.p1 === player.id || match.p2 === player.id) && match.winner && match.type !== 'bye') {
+                            tMatches.push({ isWin: match.winner === player.id, type: match.type || 'close' });
+                        }
+                    });
+                });
+            }
+
             tMatches.forEach(m => recentMatches.push(m));
 
             const res = getTournamentPointsAndResult(player.id, t);
@@ -519,6 +569,10 @@ export function generateProAmDraw(players) {
         ];
     } else {
         knockout = [
+            [ // Quarterfinals (4 Matches) - 8 Players Advance!
+                { id: 'ko_qf_1', p1: null, p2: null, winner: null, type: null }, { id: 'ko_qf_2', p1: null, p2: null, winner: null, type: null },
+                { id: 'ko_qf_3', p1: null, p2: null, winner: null, type: null }, { id: 'ko_qf_4', p1: null, p2: null, winner: null, type: null }
+            ],
             [ // Semifinals (2 Matches)
                 { id: 'ko_sf_1', p1: null, p2: null, winner: null, type: null }, { id: 'ko_sf_2', p1: null, p2: null, winner: null, type: null }
             ],
