@@ -709,7 +709,7 @@ export function PlayersView({ players, onSelectPlayer, db, appId, isAdmin }) {
                                 <div className="col-span-full mt-10 mb-6 flex items-center gap-4 px-4">
                                     <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
                                     <div className="bg-white/5 backdrop-blur-md border border-white/10 px-5 py-2 rounded-full text-white/70 text-xs font-bold uppercase tracking-widest flex items-center gap-2 shadow-lg">
-                                        <Trophy size={14} className="text-royal-400" /> Hall of Fame
+                                        <Trophy size={14} className="text-royal-400" /> Alumni
                                     </div>
                                     <div className="h-px flex-1 bg-gradient-to-l from-transparent via-white/20 to-transparent"></div>
                                 </div>

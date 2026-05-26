@@ -182,7 +182,7 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
     const getPlayer = (id) => players.find(p => p.id === id) || { name: 'TBD', rank: '-', nationality: 'UNK', imageUrl: '' };
     
     // --- NATIONS LEAGUE STATE ---
-    const [teams, setTeams] = useState(Array(16).fill(null).map((_,i) => ({ id: `team-${i}`, name: `Entry ${i+1}`, flags: [], players: [null,null,null,null] })));
+    const [teams, setTeams] = useState(Array(16).fill(null).map((_,i) => ({ id: `team-${i}`, name: `Entry ${i+1}`, flags: [], players: [null,null,null,null,null] })));
     const [editingTeamIdx, setEditingTeamIdx] = useState(null);
     const [pickingSlot, setPickingSlot] = useState(null);
     const [rosterSearch, setRosterSearch] = useState('');
@@ -196,11 +196,11 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
                 const active = players.filter(p => !p.retired).sort((a,b) => a.rank - b.rank);
                 const byNat = {};
                 active.forEach(p => { if(!byNat[p.nationality]) byNat[p.nationality] = []; byNat[p.nationality].push(p); });
-                const valid = Object.entries(byNat).filter(([k,v]) => v.length >= 4).sort((a,b) => a[1][0].rank - b[1][0].rank).slice(0, 4);
+                const valid = Object.entries(byNat).filter(([k,v]) => v.length >= 5).sort((a,b) => a[1][0].rank - b[1][0].rank).slice(0, 4);
                 
                 const newTeams = [...prev];
                 valid.forEach((nat, i) => {
-                    newTeams[i] = { id: `team-${i}`, name: getCountryName(nat[0]), flags: [nat[0]], players: nat[1].slice(0,4).map(p=>p.id) };
+                    newTeams[i] = { id: `team-${i}`, name: getCountryName(nat[0]), flags: [nat[0]], players: nat[1].slice(0,5).map(p=>p.id) };
                 });
                 return newTeams;
             });
@@ -218,7 +218,7 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
             const natPlayers = players.filter(p => p.nationality === code && !p.retired && !getUsedPlayerIds().includes(p.id)).sort((a,b) => a.rank - b.rank);
             let pIdx = 0;
             team.players = [...team.players];
-            for (let i=0; i<4; i++) {
+            for (let i=0; i<5; i++) {
                 if (!team.players[i] && pIdx < natPlayers.length) { team.players[i] = natPlayers[pIdx].id; pIdx++; }
             }
             if (team.flags.length === 1 && team.name.startsWith('Entry ')) team.name = getCountryName(code);
@@ -380,7 +380,7 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
 
                 if (tier === 'nations_league') {
                     const isTeamsValid = teams.length === 16 && teams.every(t => t.name.trim() !== '' && t.players.every(p => p !== null));
-                    if (!isTeamsValid) { setErrorMsg("All 16 teams must be fully configured with exactly 4 players."); setIsGenerating(false); return; }
+                    if (!isTeamsValid) { setErrorMsg("All 16 teams must be fully configured with exactly 5 players."); setIsGenerating(false); return; }
                     
                     const nationsData = generateNationsDraw(teams);
                     bracket = nationsData.knockout; format = nationsData.format; groupMatches = nationsData.groupMatches; groups = nationsData.groups;
@@ -596,7 +596,7 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
                                                         </div>
                                                         {!isComplete && <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0"></div>}
                                                     </div>
-                                                    <div className="grid grid-cols-4 gap-1.5">
+                                                    <div className="grid grid-cols-5 gap-1.5">
                                                         {t.players.map((pid, j) => {
                                                             const p = pid ? getPlayer(pid) : null;
                                                             const hasImg = p && (p.images?.[0] || p.imageUrl);
@@ -610,7 +610,8 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
                                                                 )
                                                             ) : (
                                                                 <div key={j} className="w-full aspect-square rounded-full border border-dashed border-white/20 bg-white/5 flex items-center justify-center opacity-50 group-hover:opacity-100 transition-opacity">
-                                                                    <Plus size={12} className="text-white/30" />
+                                                                    {/* Shrunk the plus icon slightly so it fits the new 5-column grid */}
+                                                                    <Plus size={10} className="text-white/30" />
                                                                 </div>
                                                             );
                                                         })}
@@ -749,60 +750,53 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
                     
                     {/* --- TEAM EDIT MODAL --- */}
                     {editingTeamIdx !== null && (
-                        <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-                            <div className="bg-royal-950 border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-2xl shadow-[0_20px_60px_rgba(0,0,0,0.8)] relative flex flex-col h-[85vh] md:h-auto max-h-[800px]">
+                        <div className="fixed inset-0 z-[500] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+                            <div className="bg-[#0a0a0a] border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-4xl shadow-[0_30px_80px_rgba(0,0,0,0.9)] relative flex flex-col max-h-[90vh]">
                                 <button onClick={() => { setEditingTeamIdx(null); setPickingSlot(null); }} className="absolute top-6 right-6 text-white/40 hover:text-white bg-white/5 p-2 rounded-full transition-colors z-20"><X size={20}/></button>
                                 
-                                <h2 className="text-2xl font-black text-white mb-6">Edit Roster</h2>
+                                <h2 className="text-2xl font-black text-white mb-6 drop-shadow-md">Edit Roster</h2>
                                 
-                                <div className="flex flex-col md:flex-row gap-4 mb-8 shrink-0">
+                                <div className="flex flex-col md:flex-row gap-6 mb-8 shrink-0 relative z-[100]">
                                     <div className="flex-1">
                                         <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Team Name</label>
                                         <input type="text" className="w-full bg-white/5 border border-white/10 text-white px-4 py-3 rounded-xl focus:outline-none focus:border-rose-500/50 shadow-inner" 
                                                value={teams[editingTeamIdx].name} 
                                                onChange={e => { const newT = [...teams]; newT[editingTeamIdx].name = e.target.value; setTeams(newT); }} />
                                     </div>
-                                    <div className="w-full md:w-auto min-w-[250px]">
+                                    <div className="w-full md:w-auto min-w-[300px]">
                                         <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Team Nations (Add to unlock players)</label>
                                         <div className="flex flex-wrap gap-2 items-center bg-black/40 border border-white/10 rounded-xl p-1.5 min-h-[48px]">
                                             {teams[editingTeamIdx].flags.map(f => (
-                                                <div key={f} className="flex items-center gap-1.5 bg-white/10 px-2 py-1 rounded-lg border border-white/20 shadow-sm">
-                                                    <span className="text-base drop-shadow-md leading-none">{getFlag(f)}</span>
+                                                <div key={f} className="flex items-center gap-1.5 bg-white/10 px-2 py-1.5 rounded-lg border border-white/20 shadow-sm">
+                                                    <span className="text-lg drop-shadow-md leading-none">{getFlag(f)}</span>
                                                     <span className="text-xs font-bold text-white/90">{f}</span>
-                                                    <button 
-                                                        type="button" 
-                                                        className="text-rose-400 cursor-pointer hover:text-rose-300 transition-colors ml-1 p-0.5 rounded-md hover:bg-rose-500/20" 
-                                                        onClick={(e) => { 
-                                                            e.preventDefault(); 
-                                                            e.stopPropagation(); 
-                                                            handleRemoveFlagFromTeam(f); 
-                                                        }}
-                                                    >
-                                                        <X size={12} />
+                                                    <button type="button" className="text-rose-400 cursor-pointer hover:text-rose-300 transition-colors ml-1 p-0.5 rounded-md hover:bg-rose-500/20" 
+                                                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemoveFlagFromTeam(f); }}>
+                                                        <X size={14} />
                                                     </button>
                                                 </div>
                                             ))}
-                                            <div className="relative z-50 flex-1 min-w-[140px]">
+                                            <div className="relative z-[200] flex-1 min-w-[150px]">
                                                 <CountrySelect value="" onChange={handleAddFlagToTeam} allowedCodes={unselectedNationCodes} players={players} />
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4 mb-6 shrink-0 relative z-10">
-                                    {[0,1,2,3].map(slotIdx => {
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6 shrink-0 relative z-10">
+                                    {[0,1,2,3,4].map(slotIdx => {
                                         const pId = teams[editingTeamIdx].players[slotIdx];
                                         const p = getPlayer(pId);
                                         const isSelecting = pickingSlot?.slotIdx === slotIdx;
                                         return (
                                             <div key={slotIdx} onClick={() => setPickingSlot({ teamIdx: editingTeamIdx, slotIdx })} 
-                                                 className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${isSelecting ? 'bg-rose-500/20 border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.2)]' : 'bg-black/40 border-white/10 hover:bg-white/10'}`}>
-                                                <div className={`w-10 h-10 rounded-full border shrink-0 overflow-hidden bg-black/50 flex items-center justify-center ${pId ? 'border-white/20' : 'border-dashed border-white/20'}`}>
-                                                    {pId ? <img referrerPolicy="no-referrer" src={p.images?.[0] || p.imageUrl || "https://via.placeholder.com/40"} className="w-full h-full object-cover" /> : <Plus size={16} className="text-white/20" />}
+                                                 className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col items-center text-center gap-3 shadow-sm ${isSelecting ? 'bg-rose-500/20 border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.2)]' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
+                                                <div className={`w-14 h-14 rounded-full overflow-hidden bg-black/50 border-2 flex items-center justify-center shadow-inner ${pId ? 'border-white/20' : 'border-dashed border-white/20'}`}>
+                                                    {pId ? <img referrerPolicy="no-referrer" src={p.images?.[0] || p.imageUrl || "https://via.placeholder.com/40"} className="w-full h-full object-cover" /> : <Plus size={20} className="text-white/20" />}
                                                 </div>
-                                                <div className="min-w-0">
-                                                    <div className="text-[9px] uppercase tracking-widest font-black text-white/40 mb-0.5">Slot {slotIdx + 1} {slotIdx < 2 ? '(Singles)' : '(Doubles)'}</div>
-                                                    <div className={`font-bold truncate text-sm ${pId ? 'text-white' : 'text-white/20'}`}>{pId ? p.name : 'Select Player'}</div>
+                                                <div className="min-w-0 w-full">
+                                                    <div className="text-[9px] uppercase tracking-widest font-black text-gold-400 mb-0.5">Seed {slotIdx + 1}</div>
+                                                    <div className={`font-bold truncate text-sm w-full px-1 ${pId ? 'text-white' : 'text-white/40'}`}>{pId ? p.name : 'Select Player...'}</div>
                                                 </div>
                                             </div>
                                         );
@@ -810,34 +804,50 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
                                 </div>
 
                                 {pickingSlot && (
-                                    <div className="flex-1 flex flex-col bg-black/30 border border-white/10 rounded-2xl p-2 min-h-0 relative z-0">
-                                        <div className="relative mb-2 shrink-0">
-                                            <input type="text" placeholder="Search filtered players..." className="w-full bg-white/5 border border-white/10 text-white px-3 py-2 pl-9 rounded-xl text-sm focus:outline-none focus:border-rose-500/50 transition-colors shadow-inner" value={rosterSearch} onChange={e => setRosterSearch(e.target.value)} />
-                                            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
+                                    <div className="flex-1 flex flex-col bg-black/40 border border-white/10 rounded-2xl p-3 min-h-0 relative z-0 shadow-inner">
+                                        <div className="relative mb-3 shrink-0">
+                                            <input type="text" placeholder="Search filtered players..." className="w-full bg-white/5 border border-white/10 text-white px-4 py-2.5 pl-10 rounded-xl text-sm focus:outline-none focus:border-rose-500/50 transition-colors shadow-inner" value={rosterSearch} onChange={e => setRosterSearch(e.target.value)} />
+                                            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
                                         </div>
                                         {teams[editingTeamIdx].flags.length === 0 && (
                                             <div className="text-center text-rose-400/80 text-xs font-bold py-6">Add a Team Nation flag above to unlock players.</div>
                                         )}
-                                        <div className="overflow-y-auto space-y-1 pr-1 flex-1 custom-scrollbar">
+                                        <div className="overflow-y-auto space-y-1.5 pr-1 flex-1 custom-scrollbar">
                                             {searchedAvailablePlayers.map(p => {
                                                 const isCurrentlyInThisSlot = teams[pickingSlot.teamIdx].players[pickingSlot.slotIdx] === p.id;
+                                                const wins = (p.recentMatches || []).filter(m => m.isWin).length;
                                                 return (
-                                                    <div key={p.id} onClick={() => {
+                                                    <div key={p.id} onClick={(e) => {
+                                                        e.stopPropagation();
                                                         const newT = [...teams];
                                                         newT[pickingSlot.teamIdx].players[pickingSlot.slotIdx] = isCurrentlyInThisSlot ? null : p.id;
-                                                        setTeams(newT);
-                                                        setPickingSlot(null);
-                                                        setRosterSearch('');
-                                                    }} className={`p-2.5 rounded-xl cursor-pointer flex items-center justify-between transition-all border shadow-sm ${isCurrentlyInThisSlot ? 'bg-rose-500/20 border-rose-500/40 text-white backdrop-blur-md' : 'hover:bg-white/10 text-white/70 border-white/5 hover:text-white bg-black/40'}`}>
-                                                        <span className="flex items-center min-w-0 pr-2">
-                                                            <span className="font-mono text-white/40 mr-3 w-6 text-xs font-bold text-right">#{p.rank}</span> 
-                                                            <img referrerPolicy="no-referrer" src={p.images?.[0] || p.imageUrl || "https://via.placeholder.com/40"} className="w-8 h-8 rounded-full object-cover border border-white/20 shrink-0 mr-3 shadow-sm" />
-                                                            <span className="mr-3 drop-shadow-sm text-xl">{getFlag(p.nationality)}</span> 
-                                                            <span className="font-bold truncate text-base">{p.name}</span>
-                                                        </span>
+                                                        setTeams(newT); setPickingSlot(null); setRosterSearch('');
+                                                    }} className={`p-3 rounded-xl cursor-pointer flex items-center justify-between transition-all border shadow-sm ${isCurrentlyInThisSlot ? 'bg-rose-500/20 border-rose-500/40' : 'bg-black/60 border-white/5 hover:bg-white/10 hover:border-white/10'}`}>
                                                         <div className="flex items-center gap-3">
-                                                            <span className="text-[10px] font-bold text-gold-400 bg-gold-500/10 px-3 py-1 rounded-md border border-gold-500/20 whitespace-nowrap shadow-inner">{(p.points || 0).toLocaleString()} pts</span>
-                                                            {isCurrentlyInThisSlot && <CheckCircle size={18} className="text-rose-400 shrink-0 drop-shadow-md" />}
+                                                            <span className="font-mono text-white/40 w-6 text-[10px] font-bold text-center">#{p.currentRank || p.rank || '-'}</span> 
+                                                            <img referrerPolicy="no-referrer" src={p.images?.[0] || p.imageUrl || "https://via.placeholder.com/40"} className="w-10 h-10 rounded-full object-cover border border-white/20 shrink-0 shadow-sm" />
+                                                            <div className="flex flex-col">
+                                                                <span className="font-bold text-white text-sm flex items-center gap-2">
+                                                                    {p.name} {isCurrentlyInThisSlot && <CheckCircle size={14} className="text-rose-400" />}
+                                                                </span>
+                                                                <span className="text-[10px] font-bold text-white/50 flex items-center gap-1 mt-0.5">
+                                                                    <span className="text-sm drop-shadow-sm">{getFlag(p.nationality)}</span> {p.nationality}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-5">
+                                                            <div className="flex flex-col items-end">
+                                                                <span className="text-[11px] font-black text-gold-400">{(p.points || 0).toLocaleString()}</span>
+                                                                <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest">PTS</span>
+                                                            </div>
+                                                            <div className="hidden sm:flex flex-col items-end">
+                                                                <div className="flex gap-1 mb-1">
+                                                                    {Array.from({length: 5}).map((_, i) => (
+                                                                        <div key={i} className={`w-1.5 h-1.5 rounded-full shadow-inner ${i < wins ? 'bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.5)]' : 'bg-white/10'}`}></div>
+                                                                    ))}
+                                                                </div>
+                                                                <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest">FORM</span>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 );
@@ -846,8 +856,8 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
                                     </div>
                                 )}
                                 
-                                <div className="mt-6 flex justify-end shrink-0 relative z-20">
-                                    <button type="button" onClick={() => { setEditingTeamIdx(null); setPickingSlot(null); }} className="bg-white hover:bg-gray-200 text-black px-8 py-3 rounded-xl font-black transition-colors shadow-md">Done</button>
+                                <div className="mt-6 flex justify-end shrink-0 relative z-20 pt-4 border-t border-white/10">
+                                    <button type="button" onClick={() => { setEditingTeamIdx(null); setPickingSlot(null); }} className="bg-white hover:bg-gray-200 text-black px-8 py-3 rounded-xl font-black transition-all shadow-md hover:shadow-lg active:scale-95">Done</button>
                                 </div>
                             </div>
                         </div>
@@ -1960,6 +1970,123 @@ export function SNBInternationalsBracket({ tournament, allTournaments = [], play
     );
 }
 
+export function ResolveTeamSubMatchModal({ resolvingMatch, resolvingTie, setResolvingMatch, submitResult, players, tierConf, onNavigate }) {
+    const [imgIdxMap, setImgIdxMap] = useState({});
+    useEffect(() => { setImgIdxMap({}); }, [resolvingMatch]);
+
+    if (!resolvingMatch || !resolvingTie) return null;
+
+    const getPlayer = (id) => players.find(p => p.id === id) || { name: 'TBD', points: 0, nationality: 'UNK', images: [], imageUrl: '' };
+    const is3v3 = resolvingMatch.p1.length === 3;
+
+    const handleRandomize = () => {
+        const p1Pts = resolvingMatch.p1.reduce((sum, id) => sum + (getPlayer(id).points || 0), 0);
+        const p2Pts = resolvingMatch.p2.reduce((sum, id) => sum + (getPlayer(id).points || 0), 0);
+        const prob = p1Pts / (p1Pts + p2Pts || 1);
+        const winningTeamId = Math.random() < prob ? resolvingTie.t1.id : resolvingTie.t2.id;
+        submitResult(winningTeamId, 'random');
+    };
+
+    const IconDom = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>;
+    const IconClose = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>;
+
+    const renderSquad = (playerIds, teamData, isLeft) => (
+        <div className="flex-1 w-full flex flex-col items-center justify-between relative z-10 h-full">
+            <div onClick={(e) => { e.stopPropagation(); if (teamData.flags?.[0] && onNavigate) onNavigate('nations', null, null, teamData.flags[0]); }} 
+                 className="flex flex-col items-center cursor-pointer group mb-6 drop-shadow-md z-30 pointer-events-auto">
+                <div className="flex -space-x-3 mb-2 group-hover:scale-110 transition-transform">
+                    {teamData.flags && teamData.flags.map(f => <span key={f} className="text-4xl drop-shadow-lg">{getFlag(f)}</span>)}
+                    {(!teamData.flags || teamData.flags.length === 0) && <span className="text-4xl drop-shadow-lg">🏳️</span>}
+                </div>
+                <h3 className="text-2xl font-black text-white tracking-tight group-hover:text-gold-400 group-hover:underline decoration-gold-400/50 underline-offset-4 transition-all">{teamData.name}</h3>
+            </div>
+            
+            <div className="flex flex-row flex-wrap xl:flex-nowrap gap-4 w-full justify-center px-2 flex-1 items-center overflow-hidden">
+                {playerIds.map((pid, idx) => {
+                    const p = getPlayer(pid);
+                    const imgs = p.images?.length ? p.images : [p.imageUrl];
+                    const iIdx = imgIdxMap[pid] || 0;
+                    
+                    return (
+                        <div key={idx} className="w-[180px] lg:w-[240px] xl:w-[300px] flex flex-col relative z-10 group">
+                            <div className="w-full aspect-[3/4] rounded-[1.5rem] overflow-hidden border-[3px] border-white/10 shadow-[0_15px_40px_rgba(0,0,0,0.4)] relative bg-black/40 flex items-center justify-center mb-3 shrink-0 isolate" style={{ WebkitMaskImage: '-webkit-radial-gradient(white, black)' }}>
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none -z-10"></div>
+                                {imgs[iIdx] ? (
+                                    <>
+                                        <PlayerMedia url={imgs[iIdx]} className="w-full h-full object-cover" />
+                                        <div className="absolute inset-0 z-10 pointer-events-none"></div>
+                                    </>
+                                ) : (
+                                    <span className="text-white/40 font-bold text-lg relative z-10">TBD</span>
+                                )}
+                                
+                                {imgs.length > 1 && (
+                                    <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-between px-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                        <button className="w-8 h-8 bg-black/40 hover:bg-black/80 border border-white/20 rounded-full flex items-center justify-center text-white backdrop-blur-md shadow-lg transition-all hover:scale-110 pointer-events-auto" onClick={(e) => { e.stopPropagation(); setImgIdxMap(prev => ({...prev, [pid]: (iIdx-1+imgs.length)%imgs.length })); }}>
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                                        </button>
+                                        <button className="w-8 h-8 bg-black/40 hover:bg-black/80 border border-white/20 rounded-full flex items-center justify-center text-white backdrop-blur-md shadow-lg transition-all hover:scale-110 pointer-events-auto" onClick={(e) => { e.stopPropagation(); setImgIdxMap(prev => ({...prev, [pid]: (iIdx+1)%imgs.length })); }}>
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                            <div onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate('players', pid); }} className="flex flex-col items-center justify-center cursor-pointer group z-30 pointer-events-auto">
+                                <h3 className="text-sm lg:text-base font-black text-white tracking-tight group-hover:text-gold-400 group-hover:underline decoration-gold-400/50 underline-offset-4 transition-all text-center w-full truncate px-1">{p.name}</h3>
+                                <span className="text-[10px] font-bold text-gold-400 mt-1">{(p.points||0).toLocaleString()} pts</span>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <div className="flex gap-3 w-full max-w-[340px] mt-6 shrink-0 relative z-30 pointer-events-auto">
+                <button onClick={(e) => { e.stopPropagation(); submitResult(teamData.id, 'close'); }} className="flex-[3] bg-white/90 hover:bg-white text-black py-4 rounded-xl font-black text-sm transition-all active:scale-[0.98] shadow-md hover:shadow-lg flex justify-center items-center gap-2">
+                    <IconClose/> Win Match
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); submitResult(teamData.id, 'lopsided'); }} className="flex-[1] bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/10 text-white/60 hover:text-white py-4 rounded-xl font-bold text-sm transition-all active:scale-[0.98] flex flex-col justify-center items-center gap-1 shadow-sm group">
+                    <IconDom/> <span className="text-[8px] uppercase tracking-widest opacity-80 group-hover:opacity-100">Dominant</span>
+                </button>
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[250] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-300 overflow-y-auto">
+            <div className="w-auto min-w-[800px] max-w-[95vw] h-auto max-h-[95vh] bg-[#0a0a0a] border border-white/20 shadow-[0_30px_80px_rgba(0,0,0,0.9)] rounded-[2.5rem] flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">                
+                <div className="flex items-center justify-between px-8 py-5 border-b border-white/10 bg-black/40 shrink-0">
+                    <div>
+                        <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-4">
+                            <span className="bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-3 py-1 rounded-lg text-xs uppercase tracking-widest">{is3v3 ? 'Trios (3v3)' : 'Doubles (2v2)'}</span>
+                            {resolvingMatch.name}
+                        </h2>
+                    </div>
+                    <button onClick={() => setResolvingMatch(null)} className="w-10 h-10 bg-white/5 hover:bg-white/20 rounded-full flex items-center justify-center text-white border border-white/10 transition-colors z-50">
+                        <X size={20} />
+                    </button>
+                </div>
+
+                <div className="relative flex flex-col xl:flex-row p-6 md:p-8 gap-8 justify-center items-stretch bg-gradient-to-b from-transparent to-black/40 flex-1 overflow-y-auto custom-scrollbar">
+                    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-40 pointer-events-none hidden xl:flex">
+                        <div className="w-16 h-16 bg-black border border-white/10 rounded-full flex items-center justify-center font-black text-white/40 text-2xl shadow-[0_0_40px_rgba(0,0,0,0.8)]">VS</div>
+                    </div>
+                    {renderSquad(resolvingMatch.p1, resolvingTie.t1, true)}
+                    <div className="xl:hidden w-full flex justify-center py-2 shrink-0">
+                        <div className="px-6 py-2 bg-black border border-white/10 rounded-full font-black text-white/40 text-xl shadow-lg">VS</div>
+                    </div>
+                    {renderSquad(resolvingMatch.p2, resolvingTie.t2, false)}
+                </div>
+
+                <div className="border-t border-white/10 bg-black/20 shrink-0">
+                    <button onClick={handleRandomize} className="w-full bg-gold-500 hover:bg-gold-400 text-black py-4 font-black text-sm uppercase tracking-widest transition-colors flex justify-center items-center gap-3 shadow-inner">
+                        <Shuffle size={18} strokeWidth={3}/> Auto-Resolve (Weighted Coin Toss)
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export function SNBNationsBracket({ tournament, allTournaments = [], players, onBack, db, appId, onNavigate, isAdmin }) {
     const [viewMode, setViewMode] = useState(tournament.status === 'completed' ? 'info' : 'bracket');
     const [resolvingTie, setResolvingTie] = useState(null); 
@@ -2054,15 +2181,14 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
         setSearchParams({ tie: tie.id }); 
     };
 
-    const handleSubMatchResolved = async (winnerPlayerId, type) => {
+    const handleSubMatchResolved = async (winningTeamId, type) => {
         if (!resolvingSubMatch) return;
-        const winningTeamId = (winnerPlayerId === resolvingSubMatch.p1) ? resolvingTie.t1.id : resolvingTie.t2.id;
         
         const newM = [...localMatches];
         newM[resolvingSubMatch.mIdx].winner = winningTeamId;
         newM[resolvingSubMatch.mIdx].type = type;
         setLocalMatches(newM);
-        setResolvingSubMatch(null); 
+        setResolvingSubMatch(null);
 
         const newT = JSON.parse(JSON.stringify(tournament));
         const { matchType, matchIndex, roundIndex: rIdx } = resolvingTie;
@@ -2086,18 +2212,15 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
         if (targetTie.t1 && targetTie.t2) {
             const t1 = targetTie.t1.players;
             const t2 = targetTie.t2.players;
-            targetTie.matches[0].p1 = t1[3]; targetTie.matches[0].p2 = t2[3]; 
-            targetTie.matches[1].p1 = t1[2]; targetTie.matches[1].p2 = t2[2]; 
-            targetTie.matches[2].p1 = t1[1]; targetTie.matches[2].p2 = t2[1]; 
-            targetTie.matches[3].p1 = t1[0]; targetTie.matches[3].p2 = t2[0]; 
-            targetTie.matches[4].p1 = t1[0]; targetTie.matches[4].p2 = t2[0]; 
-            if (targetTie.matches.length > 5) {
-                targetTie.matches[4].p1 = t1[3]; targetTie.matches[4].p2 = t2[2]; 
-                targetTie.matches[5].p1 = t1[2]; targetTie.matches[5].p2 = t2[3]; 
-                targetTie.matches[6].p1 = t1[1]; targetTie.matches[6].p2 = t2[0]; 
-                targetTie.matches[7].p1 = t1[0]; targetTie.matches[7].p2 = t2[1]; 
-                targetTie.matches[8].p1 = t1[0]; targetTie.matches[8].p2 = t2[0]; 
-            }
+            targetTie.matches = [
+                { mId: `${targetTie.id}-m1`, name: 'Match 1 (2v2) - The Aces', p1: [t1[0], t1[1]], p2: [t2[0], t2[1]], winner: null, type: null },
+                { mId: `${targetTie.id}-m2`, name: 'Match 2 (3v3) - The Core', p1: [t1[1], t1[2], t1[3]], p2: [t2[1], t2[2], t2[3]], winner: null, type: null },
+                { mId: `${targetTie.id}-m3`, name: 'Match 3 (2v2) - The Depth', p1: [t1[3], t1[4]], p2: [t2[3], t2[4]], winner: null, type: null },
+                { mId: `${targetTie.id}-m4`, name: 'Match 4 (3v3) - The Vanguard', p1: [t1[0], t1[2], t1[4]], p2: [t2[0], t2[2], t2[4]], winner: null, type: null },
+                { mId: `${targetTie.id}-m5`, name: 'Match 5 (2v2) - The Midline', p1: [t1[1], t1[2]], p2: [t2[1], t2[2]], winner: null, type: null },
+                { mId: `${targetTie.id}-m6`, name: 'Match 6 (3v3) - The Bench', p1: [t1[2], t1[3], t1[4]], p2: [t2[2], t2[3], t2[4]], winner: null, type: null },
+                { mId: `${targetTie.id}-m7`, name: 'Match 7 (3v3) - All Out', p1: [t1[0], t1[1], t1[2]], p2: [t2[0], t2[1], t2[2]], winner: null, type: null },
+            ];
         }
     };
 
@@ -2115,22 +2238,32 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
     };
 
     const submitTieResult = async () => {
+        // FOOLPROOF V2 CHECK: Count the exact number of matches in the tie!
+        const isV2 = localMatches.length === 7;
         const isKnockout = localMatches.length === 9;
-        const mainMatchesTotal = isKnockout ? 8 : 4;
-        let t1w = 0; let t2w = 0;
+        const mainMatchesTotal = isV2 ? 7 : (isKnockout ? 8 : 4);
         
+        let t1w = 0; let t2w = 0;
         localMatches.forEach(m => {
-            if (m.winner === resolvingTie.t1.id) t1w++;
-            else if (m.winner === resolvingTie.t2.id) t2w++;
+            if (m && m.winner === resolvingTie.t1.id) t1w++;
+            else if (m && m.winner === resolvingTie.t2.id) t2w++;
         });
 
-        const mainMatchesPlayed = localMatches.slice(0, mainMatchesTotal).filter(m => m.winner).length;
-        const allMainMatchesFinished = mainMatchesPlayed === mainMatchesTotal;
-        const isTied = t1w === t2w;
+        let hasClinched = false;
+        if (isV2) {
+            hasClinched = t1w >= 4 || t2w >= 4;
+        } else {
+            const mainMatchesPlayed = localMatches.slice(0, mainMatchesTotal).filter(m => m.winner).length;
+            const allMainMatchesFinished = mainMatchesPlayed === mainMatchesTotal;
+            const isTied = t1w === t2w;
+            hasClinched = Math.abs(t1w - t2w) > (mainMatchesTotal - mainMatchesPlayed);
+            if ((allMainMatchesFinished && !isTied) || (allMainMatchesFinished && isTied && localMatches[mainMatchesTotal].winner)) {
+                hasClinched = true;
+            }
+        }
 
-        const canSubmit = (allMainMatchesFinished && !isTied) || (allMainMatchesFinished && isTied && localMatches[mainMatchesTotal].winner);
-        if (!canSubmit) return;
-        
+        if (!hasClinched) return; 
+
         const tieWinnerId = t1w > t2w ? resolvingTie.t1.id : resolvingTie.t2.id;
         const score = `${Math.max(t1w, t2w)}-${Math.min(t1w, t2w)}`;
         const tieType = getOverallTieType(localMatches, tieWinnerId);
@@ -2146,59 +2279,27 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
         const losingTeamObj = teams.find(t => t.id === (t1w > t2w ? resolvingTie.t2.id : resolvingTie.t1.id));
 
         if (matchType === 'group') {
-            parsedGM[matchIndex].winner = winnerId; parsedGM[matchIndex].type = winType;
-            
-            // SMART CHECK: Determine exactly which groups are 100% finished
+            parsedGM[matchIndex].winner = tieWinnerId; parsedGM[matchIndex].score = score; parsedGM[matchIndex].matches = localMatches; parsedGM[matchIndex].type = tieType;
             const isGroupDone = (groupId) => {
                 const matches = parsedGM.filter(m => m && m.group === groupId);
                 return matches.length > 0 && matches.every(m => m.winner);
             };
+            const aDone = isGroupDone('A'); const bDone = isGroupDone('B');
+            const cDone = isGroupDone('C'); const dDone = isGroupDone('D');
+            const sA = calcNationStandings('A', parsedGM); const sB = calcNationStandings('B', parsedGM);
+            const sC = calcNationStandings('C', parsedGM); const sD = calcNationStandings('D', parsedGM);
 
-            const sA = calcGroupStandings('A', parsedGM); const aDone = isGroupDone('A');
-            const sB = calcGroupStandings('B', parsedGM); const bDone = isGroupDone('B');
-            const sC = calcGroupStandings('C', parsedGM); const cDone = isGroupDone('C');
-            const sD = calcGroupStandings('D', parsedGM); const dDone = isGroupDone('D');
-
-            if (tournament.format === 'pro_am' || tournament.format === 'challenger_elite') {
-                const isLargeDraw = parsedKO[0].length >= 8;
-                const isMediumDraw = parsedKO[0].length === 4;
-
-                if (isLargeDraw) {
-                    const sE = calcGroupStandings('E', parsedGM); const eDone = isGroupDone('E');
-                    const sF = calcGroupStandings('F', parsedGM); const fDone = isGroupDone('F');
-                    const sG = calcGroupStandings('G', parsedGM); const gDone = isGroupDone('G');
-                    const sH = calcGroupStandings('H', parsedGM); const hDone = isGroupDone('H');
-                    
-                    // INSTANT INJECTION: Top 2 from 8 Groups -> Round of 16
-                    if(aDone) { parsedKO[0][0].p1 = sA[0].id; parsedKO[0][4].p2 = sA[1].id; }
-                    if(bDone) { parsedKO[0][0].p2 = sB[1].id; parsedKO[0][4].p1 = sB[0].id; }
-                    if(cDone) { parsedKO[0][1].p1 = sC[0].id; parsedKO[0][5].p2 = sC[1].id; }
-                    if(dDone) { parsedKO[0][1].p2 = sD[1].id; parsedKO[0][5].p1 = sD[0].id; }
-                    if(eDone) { parsedKO[0][2].p1 = sE[0].id; parsedKO[0][6].p2 = sE[1].id; }
-                    if(fDone) { parsedKO[0][2].p2 = sF[1].id; parsedKO[0][6].p1 = sF[0].id; }
-                    if(gDone) { parsedKO[0][3].p1 = sG[0].id; parsedKO[0][7].p2 = sG[1].id; }
-                    if(hDone) { parsedKO[0][3].p2 = sH[1].id; parsedKO[0][7].p1 = sH[0].id; }
-                } else if (isMediumDraw) {
-                    // INSTANT INJECTION: Top 2 from 4 Groups -> Quarterfinals
-                    if(aDone) { parsedKO[0][0].p1 = sA[0].id; parsedKO[0][2].p2 = sA[1].id; }
-                    if(bDone) { parsedKO[0][0].p2 = sB[1].id; parsedKO[0][2].p1 = sB[0].id; }
-                    if(cDone) { parsedKO[0][1].p1 = sC[0].id; parsedKO[0][3].p2 = sC[1].id; }
-                    if(dDone) { parsedKO[0][1].p2 = sD[1].id; parsedKO[0][3].p1 = sD[0].id; }
-                } else {
-                    // LEGACY FALLBACK: Prevents old tournaments from crashing!
-                    if(aDone && sA[0]) parsedKO[0][0].p1 = sA[0].id;
-                    if(bDone && sB[0]) parsedKO[0][0].p2 = sB[0].id;
-                    if(cDone && sC[0]) parsedKO[0][1].p1 = sC[0].id;
-                    if(dDone && sD[0]) parsedKO[0][1].p2 = sD[0].id;
+            if (aDone && bDone && cDone && dDone) {
+                if(sA.length >= 2 && sB.length >= 2 && sC.length >= 2 && sD.length >= 2) {
+                    parsedKO[0][0].t1 = teams.find(t=>t.id===sA[0].id); parsedKO[0][0].t2 = teams.find(t=>t.id===sB[1].id);
+                    parsedKO[0][1].t1 = teams.find(t=>t.id===sC[0].id); parsedKO[0][1].t2 = teams.find(t=>t.id===sD[1].id);
+                    parsedKO[0][2].t1 = teams.find(t=>t.id===sB[0].id); parsedKO[0][2].t2 = teams.find(t=>t.id===sA[1].id);
+                    parsedKO[0][3].t1 = teams.find(t=>t.id===sD[0].id); parsedKO[0][3].t2 = teams.find(t=>t.id===sC[1].id);
+                    parsedKO[0].forEach(tie => populateTieMatches(tie));
                 }
-            } else {
-                // ATP FINALS INSTANT INJECTION
-                if(aDone && sA.length >= 2) { parsedKO[0][0].p1 = sA[0].id; parsedKO[0][1].p2 = sA[1].id; }
-                if(bDone && sB.length >= 2) { parsedKO[0][0].p2 = sB[1].id; parsedKO[0][1].p1 = sB[0].id; }
             }
         } else if (matchType === 'knockout') {
             parsedKO[rIdx][matchIndex].winner = tieWinnerId; parsedKO[rIdx][matchIndex].score = score; parsedKO[rIdx][matchIndex].matches = localMatches; parsedKO[rIdx][matchIndex].type = tieType;
-            
             if (rIdx === 0) { 
                 const nRIdx = 1; const nMIdx = Math.floor(matchIndex / 2);
                 if (matchIndex % 2 === 0) parsedKO[nRIdx][nMIdx].t1 = winningTeamObj; else parsedKO[nRIdx][nMIdx].t2 = winningTeamObj;
@@ -2707,24 +2808,33 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
                         </div>
                     </div>
 
-                    {/* OVERLAY TIE DASHBOARD (Rendered as a FIXED Modal on top of everything to preserve scroll!) */}
+                    {/* OVERLAY TIE DASHBOARD */}
                     {resolvingTie && (
-                        <div className="fixed inset-0 z-[200] flex flex-col bg-[#020617] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+                        <div className="fixed inset-0 z-[200] flex flex-col bg-black/60 backdrop-blur-sm overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
                             {(() => {
+                                const isV2 = localMatches.length === 7;
                                 const isKnockout = localMatches.length === 9;
-                                const mainMatchesTotal = isKnockout ? 8 : 4;
-                                let t1w = 0; let t2w = 0;
+                                const mainMatchesTotal = isV2 ? 7 : (isKnockout ? 8 : 4);
                                 
+                                let t1w = 0; let t2w = 0;
                                 localMatches.forEach(m => {
-                                    if (m.winner === resolvingTie.t1.id) t1w++;
-                                    else if (m.winner === resolvingTie.t2.id) t2w++;
+                                    if (m && m.winner === resolvingTie.t1.id) t1w++;
+                                    else if (m && m.winner === resolvingTie.t2.id) t2w++;
                                 });
 
-                                const mainMatchesPlayed = localMatches.slice(0, mainMatchesTotal).filter(m => m.winner).length;
-                                const allMainMatchesFinished = mainMatchesPlayed === mainMatchesTotal;
-                                const isTied = t1w === t2w;
-
-                                const canSubmit = (allMainMatchesFinished && !isTied) || (allMainMatchesFinished && isTied && localMatches[mainMatchesTotal].winner);
+                                let hasClinched = false;
+                                let canSubmit = false;
+                                
+                                if (isV2) {
+                                    hasClinched = t1w >= 4 || t2w >= 4;
+                                    canSubmit = hasClinched;
+                                } else {
+                                    const mainMatchesPlayed = localMatches.slice(0, mainMatchesTotal).filter(m => m.winner).length;
+                                    const allMainMatchesFinished = mainMatchesPlayed === mainMatchesTotal;
+                                    const isTied = t1w === t2w;
+                                    hasClinched = Math.abs(t1w - t2w) > (mainMatchesTotal - mainMatchesPlayed);
+                                    canSubmit = hasClinched || (allMainMatchesFinished && !isTied) || (allMainMatchesFinished && isTied && localMatches[mainMatchesTotal].winner);
+                                }
 
                                 return (
                                     <div className="flex-1 flex flex-col pb-20 relative max-w-[1200px] mx-auto w-full pt-8 px-4 xl:px-0">
@@ -2732,13 +2842,13 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
                                             <ArrowLeft className="w-4 h-4" /> Back to Bracket
                                         </button>
 
-                                        <div className="flex-1 bg-white/5 border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden rounded-[2rem]">
+                                        <div className="flex-1 bg-white/10 backdrop-blur-3xl border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden rounded-[2rem]">
                                             <div className="flex flex-col md:flex-row md:items-center justify-between px-6 py-5 border-b border-white/10 bg-black/40 shrink-0 gap-4">
                                                 <div>
                                                     <div className="flex items-center gap-3">
                                                         <h2 className="text-2xl font-black text-white tracking-tight drop-shadow-sm">Team Match Dashboard</h2>
                                                         <span className="bg-white/10 text-white/50 px-2.5 py-1 rounded-lg text-[10px] font-black tracking-widest uppercase border border-white/5">
-                                                            {localMatches.length} Matches (Singles)
+                                                            {localMatches.length} Matches
                                                         </span>
                                                     </div>
                                                     <p className="text-rose-400 text-xs mt-1.5 font-bold uppercase tracking-widest flex items-center gap-2">
@@ -2747,61 +2857,60 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
                                                 </div>
                                             </div>
 
-                                            <div className="p-4 md:p-6 bg-gradient-to-b from-black/20 to-black/60 flex flex-col gap-3 overflow-y-auto custom-scrollbar flex-1">
+                                            <div className="p-4 md:p-6 bg-gradient-to-b from-black/20 to-black/60 flex flex-col gap-2.5 overflow-y-auto custom-scrollbar flex-1">
                                                 {localMatches.map((m, idx) => {
-                                                    const p1a = getPlayer(m.p1); const p2a = getPlayer(m.p2); 
                                                     const t1WinsThisMatch = m.winner === resolvingTie.t1.id;
                                                     const t2WinsThisMatch = m.winner === resolvingTie.t2.id;
                                                     
-                                                    const isSuddenDeath = idx === mainMatchesTotal;
-                                                    let isReadyToPlay = !m.winner;
+                                                    const previousMatchesFinished = idx === 0 || localMatches.slice(0, idx).every(prev => prev.winner);
+                                                    
+                                                    let isReadyToPlay = !m.winner && !hasClinched && previousMatchesFinished;
                                                     let lockMessage = null;
-
-                                                    if (isSuddenDeath && !m.winner) {
-                                                        if (!allMainMatchesFinished) { isReadyToPlay = false; lockMessage = `Complete Matches 1-${mainMatchesTotal} First`; } 
-                                                        else if (!isTied) { isReadyToPlay = false; lockMessage = "Not Required (Tie Decided)"; }
+                                                    
+                                                    if (!m.winner && hasClinched) lockMessage = "Not Required (Tie Decided)";
+                                                    else if (!m.winner && !previousMatchesFinished) lockMessage = "Awaiting Previous Match";
+                                                    
+                                                    if (!isV2 && idx === mainMatchesTotal && !m.winner) {
+                                                        const mainMatchesPlayed = localMatches.slice(0, mainMatchesTotal).filter(match => match.winner).length;
+                                                        if (mainMatchesPlayed < mainMatchesTotal) {
+                                                            isReadyToPlay = false; lockMessage = `Complete Matches 1-${mainMatchesTotal} First`;
+                                                        } else if (t1w !== t2w) {
+                                                            isReadyToPlay = false; lockMessage = "Not Required (Tie Decided)";
+                                                        } else {
+                                                            isReadyToPlay = true; lockMessage = null;
+                                                        }
                                                     }
 
                                                     return (
                                                         <div key={idx} 
                                                              onClick={() => { if(isReadyToPlay) setResolvingSubMatch({ ...m, mIdx: idx }) }}
-                                                             className={`relative bg-white/5 border rounded-2xl p-3 flex flex-col md:flex-row gap-4 items-center transition-all ${isReadyToPlay ? 'border-white/30 cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:border-rose-500/50 hover:bg-white/10' : 'border-white/10 opacity-70 bg-black/40'} ${isSuddenDeath ? 'ring-1 ring-gold-500/30' : ''}`}>
+                                                             className={`relative bg-white/5 border rounded-xl p-2 sm:p-3 flex flex-col md:flex-row gap-3 items-center transition-all ${isReadyToPlay ? 'border-white/30 cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:border-rose-500/50 hover:bg-white/10' : 'border-white/10 opacity-70 bg-black/40'}`}>
                                                             
-                                                            {isSuddenDeath && lockMessage && (
-                                                                <div className="absolute inset-0 bg-black/80 backdrop-blur-[2px] rounded-2xl flex items-center justify-center z-20">
-                                                                    <span className="bg-black/90 text-white/60 border border-white/10 px-4 py-2 rounded-xl text-[9px] font-black tracking-widest uppercase flex items-center gap-2 shadow-xl">
-                                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                                                            {lockMessage && (
+                                                                <div className="absolute inset-0 bg-black/80 backdrop-blur-[2px] rounded-xl flex items-center justify-center z-20">
+                                                                    <span className="bg-black/90 text-white/60 border border-white/10 px-4 py-1.5 rounded-lg text-[9px] font-black tracking-widest uppercase flex items-center gap-2 shadow-xl">
                                                                         {lockMessage}
                                                                     </span>
                                                                 </div>
                                                             )}
 
-                                                            <div className="w-full md:w-32 shrink-0 text-center md:text-left border-b md:border-b-0 md:border-r border-white/10 pb-2 md:pb-0 md:pr-3">
-                                                                <div className={`text-[10px] font-black uppercase tracking-widest ${isSuddenDeath ? 'text-gold-400' : 'text-white/50'}`}>{m.name}</div>
-                                                                <div className="text-[9px] font-bold text-rose-400 mt-0.5">1v1</div>
+                                                            <div className="w-full md:w-48 shrink-0 text-center md:text-left border-b md:border-b-0 md:border-r border-white/10 pb-2 md:pb-0 md:pr-3">
+                                                                <div className="text-[10px] font-black uppercase tracking-widest text-white/50">{m.name}</div>
                                                             </div>
 
                                                             <div className="flex-1 flex w-full gap-4 items-center justify-between">
-                                                                <div onClick={(e) => { e.stopPropagation(); onNavigate('players', p1a.id); }} className={`flex flex-col items-center gap-1.5 flex-1 transition-all cursor-pointer hover:scale-105 ${t2WinsThisMatch ? 'opacity-30 grayscale' : ''}`}>
-                                                                    <img referrerPolicy="no-referrer" src={p1a.images?.[0] || p1a.imageUrl || "https://via.placeholder.com/40"} className="w-10 h-10 rounded-full object-cover border-2 border-white/20 shadow-md bg-black/50" />
-                                                                    <span className={`font-bold text-xs text-center ${t1WinsThisMatch ? 'text-white' : 'text-white/70'}`}>{p1a.name}</span>
-                                                                    {t1WinsThisMatch && <span className="bg-rose-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm">WINNER</span>}
+                                                                <div className={`flex items-center justify-center gap-1.5 flex-1 transition-all ${t2WinsThisMatch ? 'opacity-30 grayscale' : ''}`}>
+                                                                    {Array.isArray(m.p1) ? m.p1.map(id => <img key={id} src={getPlayer(id).images?.[0] || getPlayer(id).imageUrl} className="w-8 h-8 rounded-full object-cover border border-white/20 shadow-sm bg-black/50" />) : <img src={getPlayer(m.p1).imageUrl} className="w-8 h-8 rounded-full" />}
+                                                                    {t1WinsThisMatch && <span className="bg-rose-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm ml-2">WINNER</span>}
                                                                 </div>
                                                                 
-                                                                <div className="shrink-0 text-white/20 font-black italic text-lg px-2">VS</div>
+                                                                <div className="shrink-0 text-white/20 font-black italic text-sm px-2">VS</div>
                                                                 
-                                                                <div onClick={(e) => { e.stopPropagation(); onNavigate('players', p2a.id); }} className={`flex flex-col items-center gap-1.5 flex-1 transition-all cursor-pointer hover:scale-105 ${t1WinsThisMatch ? 'opacity-30 grayscale' : ''}`}>
-                                                                    <img referrerPolicy="no-referrer" src={p2a.images?.[0] || p2a.imageUrl || "https://via.placeholder.com/40"} className="w-10 h-10 rounded-full object-cover border-2 border-white/20 shadow-md bg-black/50" />
-                                                                    <span className={`font-bold text-xs text-center ${t2WinsThisMatch ? 'text-white' : 'text-white/70'}`}>{p2a.name}</span>
-                                                                    {t2WinsThisMatch && <span className="bg-rose-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm">WINNER</span>}
+                                                                <div className={`flex items-center justify-center gap-1.5 flex-1 transition-all ${t1WinsThisMatch ? 'opacity-30 grayscale' : ''}`}>
+                                                                    {Array.isArray(m.p2) ? m.p2.map(id => <img key={id} src={getPlayer(id).images?.[0] || getPlayer(id).imageUrl} className="w-8 h-8 rounded-full object-cover border border-white/20 shadow-sm bg-black/50" />) : <img src={getPlayer(m.p2).imageUrl} className="w-8 h-8 rounded-full" />}
+                                                                    {t2WinsThisMatch && <span className="bg-rose-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm ml-2">WINNER</span>}
                                                                 </div>
                                                             </div>
-                                                            
-                                                            {isReadyToPlay && !lockMessage && (
-                                                                <div className="shrink-0 pl-3 hidden md:block">
-                                                                    <button className="bg-rose-500/20 text-rose-400 border border-rose-500/40 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-rose-500 hover:text-white">Play</button>
-                                                                </div>
-                                                            )}
                                                         </div>
                                                     );
                                                 })}
@@ -2809,17 +2918,17 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
 
                                             <div className="p-4 md:p-6 border-t border-white/10 bg-black/40 flex flex-col md:flex-row justify-between items-center shrink-0 gap-4">
                                                 <div className="text-white/50 text-[10px] font-bold uppercase tracking-widest text-center md:text-left">
-                                                    {isKnockout ? "Complete 8 matches. Tiebreaker unlocks if 4-4." : "Complete 4 matches. Tiebreaker unlocks if 2-2."}
+                                                    {isV2 ? "First to 4 wins clinches the series." : (isKnockout ? "Complete 8 matches. Tiebreaker unlocks if 4-4." : "Complete 4 matches. Tiebreaker unlocks if 2-2.")}
                                                     <br/>
                                                     <span className="text-white/30 text-[9px]">Current Score: {resolvingTie.t1.name} {t1w} - {t2w} {resolvingTie.t2.name}</span>
                                                 </div>
                                                 {resolvingTie.winner ? (
                                                     <div className="w-full md:w-auto bg-white/5 text-white/40 px-8 py-3 rounded-xl font-black tracking-widest uppercase text-xs text-center border border-white/5">
-                                                        Match Concluded
+                                                        Series Concluded
                                                     </div>
                                                 ) : (
                                                     <button onClick={submitTieResult} disabled={!canSubmit} className="w-full md:w-auto bg-rose-500 hover:bg-rose-400 text-white px-8 py-3 rounded-xl font-black tracking-widest uppercase transition-all shadow-[0_0_20px_rgba(244,63,94,0.4)] disabled:opacity-30 disabled:cursor-not-allowed text-xs">
-                                                        Confirm Final Result
+                                                        {canSubmit ? "Confirm Series Winner" : "Awaiting Matches"}
                                                     </button>
                                                 )}
                                             </div>
@@ -2833,18 +2942,15 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
             )}
             
             
-
-            {/* Cinematic Resolve Modal */}
-            <ResolveMatchModal 
+            {/* Cinematic Resolve Modal for V2 Squad Clashes */}
+            <ResolveTeamSubMatchModal 
                 resolvingMatch={resolvingSubMatch} 
+                resolvingTie={resolvingTie}
                 setResolvingMatch={setResolvingSubMatch} 
                 submitResult={handleSubMatchResolved} 
-                handleRandomize={handleRandomizeSubMatch} 
                 players={players} 
-                allTournaments={allTournaments} 
-                tournament={tournament} 
                 tierConf={tierConf} 
-                onNavigate={onNavigate} 
+                onNavigate={onNavigate}
             />
             
         </div>

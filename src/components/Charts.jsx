@@ -1,14 +1,30 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, X, AnalyticsIcon } from './Icons';
+import { AnalyticsIcon } from './Icons';
 import { PlayerMedia } from './SharedUI';
 import { getFlag, getCountryName } from '../utils/helpers';
 
 // --- GLOBAL CHART SYNC STATE ---
-export const __snbSharedChartState = { windowSize: 10, offset: 0, showDropped: false, cutoff: 12, layoutMode: 'compact' };
+export const __snbSharedChartState = { windowSize: 10, offset: 0, showDropped: false, cutoff: 12, layoutMode: 'linear' };
 export const __snbChartListeners = new Set();
 export const updateSnbChartState = (updates) => {
     Object.assign(__snbSharedChartState, updates);
     __snbChartListeners.forEach(l => l());
+};
+
+const CHART_PALETTE = ["#facc15", "#38bdf8", "#f472b6", "#4ade80", "#fb923c", "#a78bfa", "#2dd4bf", "#f87171", "#818cf8", "#e879f9", "#34d399", "#fbbf24", "#60a5fa", "#a3e635", "#f43f5e", "#c084fc", "#22d3ee", "#fcd34d", "#10b981", "#8b5cf6", "#fdba74", "#67e8f9", "#d9f99d", "#fda4af"];
+const getDistinctColor = (id) => {
+    let hash = 0; for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash);
+    return CHART_PALETTE[Math.abs(hash) % CHART_PALETTE.length];
+};
+
+export const getLogY = (val, maxVal, minLogVal, plotH, bottomY) => {
+    if (val <= 0) return bottomY;
+    const safeVal = Math.max(minLogVal, val);
+    const logMin = Math.log10(minLogVal);
+    const logMax = Math.log10(Math.max(minLogVal + 1, maxVal));
+    const logVal = Math.log10(safeVal);
+    const pct = (logVal - logMin) / (logMax - logMin);
+    return bottomY - (pct * plotH);
 };
 
 export function IndividualPlayerChart({ history, type, filterPlayed = false, totalPlayersCount = 10, isRetired = false }) {
@@ -17,6 +33,7 @@ export function IndividualPlayerChart({ history, type, filterPlayed = false, tot
 
     const rawData = filterPlayed ? history.filter(d => d.played) : history.filter(d => d.isMajorPlus);
     const data = rawData.slice(range === 'all' ? 0 : -range);
+    
     if (data.length < 1) return <p className="text-white/40 text-sm mt-8 font-medium italic text-center w-full">Not enough tournament history.</p>;
 
     const width = 1000;
@@ -81,13 +98,16 @@ export function IndividualPlayerChart({ history, type, filterPlayed = false, tot
                         })()
                     ) : (
                         (() => {
-                            const step = Math.max(10, Math.ceil(maxVal / 8)); 
-                            const yLines = [];
-                            for(let v = 0; v <= maxVal; v += step) yLines.push(v);
+                            const rawStep = maxVal / 5;
+                            const mag = Math.pow(10, Math.floor(Math.log10(rawStep || 1)));
+                            const step = Math.max(10, Math.ceil(rawStep / mag) * mag);
+                            const yLines = [0]; 
+                            for(let v = step; v <= maxVal; v += step) yLines.push(v);
+                            
                             return yLines.map((p, i) => (
                                 <g key={`grid-${i}`}>
-                                    <line x1={pad.left} y1={getY(p)} x2={width - pad.right} y2={getY(p)} stroke="rgba(255,255,255,0.1)" strokeWidth="1" strokeDasharray="4 4" />
-                                    <text x={pad.left - 10} y={getY(p)} fill="rgba(255,255,255,0.3)" fontSize="12" fontWeight="bold" textAnchor="end" alignmentBaseline="middle">{p.toLocaleString()}</text>
+                                    <line x1={pad.left} y1={getY(p)} x2={width - pad.right + 20} y2={getY(p)} stroke={p === 0 ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.05)"} strokeWidth={p === 0 ? "2" : "1.5"} strokeDasharray={p === 0 ? "none" : "4 4"} />
+                                    <text x={pad.left - 15} y={getY(p)} fill="rgba(255,255,255,0.3)" fontSize="12" fontWeight="bold" textAnchor="end" alignmentBaseline="middle">{p === 0 ? 0 : Math.round(p).toLocaleString()}</text>
                                 </g>
                             ));
                         })()
@@ -192,6 +212,9 @@ export function TopPlayersChart({ globalHistory, playersRaw, type, onNavigate })
     const hasCutoff = cutoff !== 'all';
     const isAll = !hasCutoff;
     
+    // Auto-enable Log scale natively when viewing all players' points!
+    const isLogScale = layoutMode === 'logarithmic' || (type === 'points' && isAll && layoutMode !== 'linear');
+    
     const filteredHistory = globalHistory.filter(h => h.isMajorPlus);
     const N = filteredHistory.length;
 
@@ -224,12 +247,6 @@ export function TopPlayersChart({ globalHistory, playersRaw, type, onNavigate })
         return indices;
     }, [filteredHistory, playersRaw]);
 
-    const CHART_PALETTE = ["#facc15", "#38bdf8", "#f472b6", "#4ade80", "#fb923c", "#a78bfa", "#2dd4bf", "#f87171", "#818cf8", "#e879f9", "#34d399", "#fbbf24", "#60a5fa", "#a3e635", "#f43f5e", "#c084fc", "#22d3ee", "#fcd34d", "#10b981", "#8b5cf6", "#fdba74", "#67e8f9", "#d9f99d", "#fda4af"];
-    const getDistinctColor = (id) => {
-        let hash = 0; for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash);
-        return CHART_PALETTE[Math.abs(hash) % CHART_PALETTE.length];
-    };
-
     const includedPlayerIds = new Set();
     let absoluteMaxRank = 12;
     historyData.forEach(h => h.standings?.forEach(s => { 
@@ -237,13 +254,7 @@ export function TopPlayersChart({ globalHistory, playersRaw, type, onNavigate })
         if (s.rank > absoluteMaxRank) absoluteMaxRank = s.rank;
     }));
 
-    const cConf = {
-        8: { gap: 28, font: 12, img: 20, rectH: 26, rectW: 140, ptR: 3.5, debutR: 4.5, stroke: 2 },
-        12: { gap: 24, font: 11, img: 18, rectH: 22, rectW: 125, ptR: 3, debutR: 4, stroke: 1.5 },
-        24: { gap: 20, font: 10, img: 16, rectH: 18, rectW: 110, ptR: 2, debutR: 3, stroke: 1.2 },
-        'all': { gap: 16, font: 9, img: 12, rectH: 14, rectW: 100, ptR: 1.5, debutR: 2.5, stroke: 1 }
-    }[cutoff] || { gap: 16, font: 9, img: 12, rectH: 14, rectW: 100, ptR: 1.5, debutR: 2.5, stroke: 1 };
-
+    const cConf = { gap: 16, font: 9, img: 12, rectH: 14, rectW: 100, ptR: 1.5, debutR: 2.5, stroke: 1.5 };
     const width = 1200;
     const effectiveCutoff = hasCutoff ? cutoff : absoluteMaxRank;
 
@@ -256,20 +267,14 @@ export function TopPlayersChart({ globalHistory, playersRaw, type, onNavigate })
     }
 
     let plotHeight = 480;
-    const isExtendedMode = layoutMode === 'extended' && type === 'points' && isAll;
-
-    if (isExtendedMode) {
-        plotHeight = Math.max(1200, includedPlayerIds.size * cConf.gap * 2.5); 
+    if (type === 'rank') {
+        if (cutoff === 8) plotHeight = 350;
+        else if (cutoff === 12) plotHeight = 450;
+        else if (cutoff === 24) plotHeight = 550;
+        else plotHeight = Math.max(500, (effectiveCutoff - 1) * (cConf.rectH + 4));
     } else {
-        if (type === 'rank') {
-            if (cutoff === 8) plotHeight = 350;
-            else if (cutoff === 12) plotHeight = 450;
-            else if (cutoff === 24) plotHeight = 550;
-            else plotHeight = Math.max(500, (effectiveCutoff - 1) * (cConf.rectH + 4));
-        } else {
-            const baseHeight = cutoff === 8 ? 500 : cutoff === 12 ? 650 : cutoff === 24 ? 800 : 1000;
-            plotHeight = Math.max(baseHeight, includedPlayerIds.size * (cConf.rectH + 4));
-        }
+        const baseHeight = cutoff === 8 ? 500 : cutoff === 12 ? 600 : 700;
+        plotHeight = Math.max(baseHeight, includedPlayerIds.size * 6);
     }
 
     const pad = { top: 60, right: isAll ? 130 : 200, left: type === 'rank' ? 60 : 80, bottom: isAll ? 40 : 100 }; 
@@ -278,6 +283,7 @@ export function TopPlayersChart({ globalHistory, playersRaw, type, onNavigate })
     const getX = (i) => historyData.length <= 1 ? (pad.left + (width - pad.left - pad.right) / 2) : pad.left + (i * ((width - pad.left - pad.right) / (historyData.length - 1)));
     const getY = (val) => {
         if (type === 'rank') return pad.top + ((val - 1) / Math.max(1, effectiveCutoff - 1)) * plotHeight;
+        if (isLogScale && val > 0) return getLogY(val, maxPointsVal, 10, plotHeight, gridBottomY);
         return gridBottomY - (val / Math.max(1, maxPointsVal)) * plotHeight;
     };
 
@@ -369,7 +375,7 @@ export function TopPlayersChart({ globalHistory, playersRaw, type, onNavigate })
         if (!placed) columns.push({ x: l.endX, labels: [l] });
     });
 
-    const physicsGap = isExtendedMode ? cConf.gap : (cConf.rectH + 2); 
+    const physicsGap = cConf.rectH + 2; 
 
     columns.forEach(col => {
         const colLabels = col.labels;
@@ -401,7 +407,6 @@ export function TopPlayersChart({ globalHistory, playersRaw, type, onNavigate })
 
     return (
         <div className="w-full" id={`snb-chart-${type}`}>
-            {/* GLASS CONTROLS DASHBOARD */}
             <div className="flex flex-wrap gap-4 items-center justify-between mb-6 bg-black/20 backdrop-blur-md p-3 rounded-2xl border border-white/5 shadow-inner">
                 <div className="flex items-center gap-4 flex-wrap">
                     <div className="flex items-center gap-1.5 bg-black/40 p-1.5 rounded-xl border border-white/5 shadow-inner">
@@ -431,12 +436,12 @@ export function TopPlayersChart({ globalHistory, playersRaw, type, onNavigate })
                         ))}
                     </div>
                     
-                    {type === 'points' && isAll && (
+                    {type === 'points' && (
                         <>
                             <div className="w-px h-6 bg-white/10 hidden lg:block"></div>
                             <div className="flex items-center gap-1.5 bg-black/40 p-1.5 rounded-xl border border-white/5 shadow-inner">
-                                <button onClick={() => updateSnbChartState({ layoutMode: 'compact' })} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${layoutMode === 'compact' ? 'bg-gold-500 text-black shadow-sm' : 'bg-transparent text-white/50 hover:text-white hover:bg-white/10'}`}>Compact</button>
-                                <button onClick={() => updateSnbChartState({ layoutMode: 'extended' })} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${layoutMode === 'extended' ? 'bg-gold-500 text-black shadow-sm' : 'bg-transparent text-white/50 hover:text-white hover:bg-white/10'}`}>Extended</button>
+                                <button onClick={() => updateSnbChartState({ layoutMode: 'linear' })} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${!isLogScale ? 'bg-gold-500 text-black shadow-sm' : 'bg-transparent text-white/50 hover:text-white hover:bg-white/10'}`}>Linear</button>
+                                <button onClick={() => updateSnbChartState({ layoutMode: 'logarithmic' })} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${isLogScale ? 'bg-gold-500 text-black shadow-sm' : 'bg-transparent text-white/50 hover:text-white hover:bg-white/10'}`}>Logarithmic</button>
                             </div>
                         </>
                     )}
@@ -451,7 +456,6 @@ export function TopPlayersChart({ globalHistory, playersRaw, type, onNavigate })
                 {selectedLineId && <button onClick={() => setSelectedLineId(null)} className="text-xs font-black uppercase tracking-widest text-rose-400 hover:text-rose-300 px-4 py-2 bg-rose-500/10 rounded-xl border border-rose-500/20 transition-colors shadow-sm">Clear Selection</button>}
             </div>
             
-            {/* SVG WRAPPER */}
             <div className="w-full bg-black/20 rounded-3xl border border-white/5 pt-4 pb-2 relative overflow-x-auto select-none custom-scrollbar" onClick={() => setSelectedLineId(null)}>
                 <svg viewBox={`0 0 ${width} ${dynamicHeight}`} style={{ minWidth: `800px`, transition: 'viewBox 0.3s ease' }} className="w-full h-auto overflow-visible font-sans">
                     <defs>
@@ -471,7 +475,6 @@ export function TopPlayersChart({ globalHistory, playersRaw, type, onNavigate })
                         </g>
                     )}
 
-                    {/* REFINED GLASS GRID LINES */}
                     {type === 'rank' ? (
                         (() => {
                             const rLines = [];
@@ -488,14 +491,21 @@ export function TopPlayersChart({ globalHistory, playersRaw, type, onNavigate })
                         })()
                     ) : (
                         (() => {
-                            const rawStep = maxPointsVal / (isAll ? 20 : 15);
-                            const mag = Math.pow(10, Math.floor(Math.log10(rawStep || 1)));
-                            const step = Math.max(10, Math.ceil(rawStep / mag) * mag);
-                            const yLines = [0]; for(let v = step; v <= maxPointsVal; v += step) yLines.push(v);
+                            let yLines = [];
+                            if (isLogScale) {
+                                yLines = [0];
+                                const maxPow = Math.ceil(Math.log10(maxPointsVal));
+                                for (let i = 1; i <= maxPow; i++) yLines.push(Math.pow(10, i));
+                            } else {
+                                const rawStep = maxPointsVal / (isAll ? 20 : 15);
+                                const mag = Math.pow(10, Math.floor(Math.log10(rawStep || 1)));
+                                const step = Math.max(10, Math.ceil(rawStep / mag) * mag);
+                                yLines = [0]; for(let v = step; v <= maxPointsVal; v += step) yLines.push(v);
+                            }
                             return yLines.map((p, i) => (
                                 <g key={`grid-${i}`}>
                                     <line x1={pad.left} y1={getY(p)} x2={width - pad.right + 20} y2={getY(p)} stroke={p === 0 ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.05)"} strokeWidth={p === 0 ? "2" : "1.5"} strokeDasharray={p === 0 ? "none" : "4 4"} />
-                                    <text x={pad.left - 15} y={getY(p)} fill="rgba(255,255,255,0.3)" fontSize="12" fontWeight="bold" textAnchor="end" alignmentBaseline="middle">{Math.round(p).toLocaleString()}</text>
+                                    <text x={pad.left - 15} y={getY(p)} fill="rgba(255,255,255,0.3)" fontSize="12" fontWeight="bold" textAnchor="end" alignmentBaseline="middle">{p === 0 ? 0 : Math.round(p).toLocaleString()}</text>
                                 </g>
                             ));
                         })()
@@ -505,7 +515,7 @@ export function TopPlayersChart({ globalHistory, playersRaw, type, onNavigate })
                         const isHighlighted = selectedLineId === line.player.id || hoveredLineId === line.player.id;
                         const isFaded = (selectedLineId || hoveredLineId) && !isHighlighted;
                         return line.paths.map((pStr, pIdx) => (
-                            <path key={`path-${line.player.id}-${pIdx}`} d={pStr} fill="none" stroke={line.color} strokeWidth={isHighlighted ? cConf.stroke * 2 : cConf.stroke} opacity={isFaded ? 0.15 : 0.9} strokeLinejoin="round" strokeLinecap="round" className="cursor-pointer" onClick={(e) => { e.stopPropagation(); setSelectedLineId(line.player.id === selectedLineId ? null : line.player.id); }} onMouseEnter={() => setHoveredLineId(line.player.id)} onMouseLeave={() => setHoveredLineId(null)} style={{ filter: isHighlighted ? `drop-shadow(0 0 6px ${line.color}60)` : 'none' }} />
+                            <path key={`path-${line.player.id}-${pIdx}`} d={pStr} fill="none" stroke={line.color} strokeWidth={isHighlighted ? cConf.stroke * 2.5 : cConf.stroke} opacity={isFaded ? 0.15 : 0.9} strokeLinejoin="round" strokeLinecap="round" className="cursor-pointer" onClick={(e) => { e.stopPropagation(); setSelectedLineId(line.player.id === selectedLineId ? null : line.player.id); }} onMouseEnter={() => setHoveredLineId(line.player.id)} onMouseLeave={() => setHoveredLineId(null)} style={{ filter: isHighlighted ? `drop-shadow(0 0 6px ${line.color}60)` : 'none' }} />
                         ));
                     })}
                     
@@ -514,7 +524,9 @@ export function TopPlayersChart({ globalHistory, playersRaw, type, onNavigate })
                         const isFaded = (selectedLineId || hoveredLineId) && !isHighlighted;
                         const endPt = line.segments[line.segments.length - 1].slice(-1)[0];
                         const isDropped = line.player.retired || (hasCutoff ? (endPt.isIntersection || endPt.k < historyData.length - 1) : (!endPt.exists || endPt.k < historyData.length - 1));
-                        const shouldShowLabel = isAll ? true : (!isDropped || showDropped || isHighlighted);
+                        
+                        // Hide massive label clusters if viewing all points, unless hovered
+                        const shouldShowLabel = (type === 'points' && isAll) ? isHighlighted : (!isDropped || showDropped || isHighlighted);
                         const adjY = labelPositions[line.player.id];
 
                         return (
@@ -538,13 +550,14 @@ export function TopPlayersChart({ globalHistory, playersRaw, type, onNavigate })
                                     );
                                 }))}
 
-                                {shouldShowLabel && (Math.abs(adjY - endPt.y) > 2 || isDropped || isExtendedMode) && (
-                                    <path d={`M ${endPt.x} ${endPt.y} C ${endPt.x + 15} ${endPt.y}, ${endPt.x + 10} ${adjY}, ${endPt.x + (isAll ? 10 : 20)} ${adjY}`} fill="none" stroke={line.color} strokeWidth="1.5" opacity="0.5" strokeDasharray="4 4" style={{ transition: 'opacity 0.3s ease' }} />
+                                {/* Smart Physics: Disable dashed lines and spaced labels if viewing ALL points */}
+                                {shouldShowLabel && (!isAll) && (Math.abs(adjY - endPt.y) > 2 || isDropped) && (
+                                    <path d={`M ${endPt.x} ${endPt.y} C ${endPt.x + 15} ${endPt.y}, ${endPt.x + 10} ${adjY}, ${endPt.x + 20} ${adjY}`} fill="none" stroke={line.color} strokeWidth="1.5" opacity="0.5" strokeDasharray="4 4" style={{ transition: 'opacity 0.3s ease' }} />
                                 )}
 
                                 {shouldShowLabel && (
-                                    <g transform={`translate(${endPt.x + (isAll ? 10 : 20)}, ${adjY})`} className="cursor-pointer" style={{ transition: 'opacity 0.3s ease, transform 0.3s ease' }} onClick={(e) => { e.stopPropagation(); onNavigate('players', line.player.id); }} onMouseEnter={() => setHoveredLineId(line.player.id)} onMouseLeave={() => setHoveredLineId(null)}>
-                                        <rect x="0" y={-cConf.rectH/2} width={cConf.rectW} height={cConf.rectH} rx={cConf.rectH/2} fill="#000000" fillOpacity={isHighlighted ? "0.9" : (isDropped ? "0.5" : "0.7")} stroke={line.color} strokeWidth={isHighlighted ? 2 : 1} style={{ filter: isHighlighted ? `drop-shadow(0 0 10px ${line.color}60)` : 'none' }} />
+                                    <g transform={`translate(${endPt.x + (isAll ? 10 : 20)}, ${isAll ? endPt.y : adjY})`} className="cursor-pointer z-50" style={{ transition: 'opacity 0.3s ease, transform 0.3s ease' }} onClick={(e) => { e.stopPropagation(); onNavigate('players', line.player.id); }} onMouseEnter={() => setHoveredLineId(line.player.id)} onMouseLeave={() => setHoveredLineId(null)}>
+                                        <rect x="0" y={-cConf.rectH/2} width={cConf.rectW} height={cConf.rectH} rx={cConf.rectH/2} fill="#000000" fillOpacity={isHighlighted ? "0.95" : (isDropped ? "0.5" : "0.7")} stroke={line.color} strokeWidth={isHighlighted ? 2 : 1} style={{ filter: isHighlighted ? `drop-shadow(0 0 10px ${line.color}60)` : 'none' }} />
                                         {line.player.imageUrl ? (
                                             <image href={line.player.imageUrl} x="4" y={-cConf.img/2} width={cConf.img} height={cConf.img} clipPath={`url(#clip-${type}-${line.player.id})`} preserveAspectRatio="xMidYMid slice" style={{ filter: isDropped && !isHighlighted ? 'grayscale(0.8)' : 'none' }} />
                                         ) : ( <circle cx={4 + cConf.img/2} cy="0" r={cConf.img/2} fill="#1e293b" /> )}
@@ -572,6 +585,8 @@ export function TopNationsChart({ globalHistory, playersRaw, onNavigate }) {
     }, []);
 
     const { windowSize, offset, layoutMode } = __snbSharedChartState;
+    const isLogScale = layoutMode === 'logarithmic';
+
     const allHistory = globalHistory.filter(h => h.isMajorPlus);
     const N = allHistory.length;
 
@@ -597,9 +612,7 @@ export function TopNationsChart({ globalHistory, playersRaw, onNavigate }) {
 
     const width = 1200;
     const cConf = { gap: 20, font: 9, rectH: 20, rectW: 64, ptR: 3, debutR: 4, stroke: 2 };    
-    // MASSIVE Y-AXIS STRETCH FOR EXTENDED MODE
-    const plotHeight = layoutMode === 'extended' ? Math.max(1200, nationCodes.size * cConf.gap * 4) : Math.max(600, nationCodes.size * cConf.gap * 1.5);
-    
+    const plotHeight = 480; 
     const pad = { top: 40, right: 140, left: 80, bottom: 40 }; 
     const gridBottomY = pad.top + plotHeight;
 
@@ -633,7 +646,10 @@ export function TopNationsChart({ globalHistory, playersRaw, onNavigate }) {
     });
 
     const getX = (i) => historyData.length <= 1 ? (pad.left + (width - pad.left - pad.right) / 2) : pad.left + (i * ((width - pad.left - pad.right) / (historyData.length - 1)));
-    const getY = (val) => gridBottomY - (val / Math.max(1, maxPointsVal)) * plotHeight;
+    const getY = (val) => {
+        if (isLogScale && val > 0) return getLogY(val, maxPointsVal, 10, plotHeight, gridBottomY);
+        return gridBottomY - (val / Math.max(1, maxPointsVal)) * plotHeight;
+    };
 
     const lines = [];
     Array.from(nationCodes).forEach(code => {
@@ -643,7 +659,6 @@ export function TopNationsChart({ globalHistory, playersRaw, onNavigate }) {
         timeline.forEach((pt, i) => {
             const isDebut = pt.val > 0 && nationDebuts[code] === historyData[pt.k].id;
             const mappedPt = { ...pt, x: getX(pt.k), y: getY(pt.val), isDot: true, isDebut };
-            
             if (pt.val > 0 || (i > 0 && timeline[i-1].val > 0)) { currentSeg.push(mappedPt); } 
             else if (currentSeg.length > 0) { segments.push(currentSeg); currentSeg = []; }
         });
@@ -661,7 +676,7 @@ export function TopNationsChart({ globalHistory, playersRaw, onNavigate }) {
     });
     labels.sort((a, b) => b.actualVal - a.actualVal);
 
-    const physicsGap = layoutMode === 'extended' ? cConf.gap : cConf.gap * 0.8;
+    const physicsGap = cConf.gap * 0.8;
     if (labels.length > 0) {
         labels[0].currentY = labels[0].endY;
         for (let i = 1; i < labels.length; i++) labels[i].currentY = Math.max(labels[i].endY, labels[i-1].currentY + physicsGap);
@@ -680,7 +695,6 @@ export function TopNationsChart({ globalHistory, playersRaw, onNavigate }) {
 
     return (
         <div className="w-full">
-            {/* GLASS CONTROLS DASHBOARD */}
             <div className="flex flex-wrap gap-4 items-center justify-between mb-6 bg-black/20 backdrop-blur-md p-3 rounded-2xl border border-white/5 shadow-inner">
                 <div className="flex items-center gap-4 flex-wrap">
                     <div className="flex items-center gap-1.5 bg-black/40 p-1.5 rounded-xl border border-white/5 shadow-inner">
@@ -701,25 +715,31 @@ export function TopNationsChart({ globalHistory, playersRaw, onNavigate }) {
                     )}
                     <div className="w-px h-6 bg-white/10 hidden lg:block"></div>
                     <div className="flex items-center gap-1.5 bg-black/40 p-1.5 rounded-xl border border-white/5 shadow-inner">
-                        <button onClick={() => updateSnbChartState({ layoutMode: 'compact' })} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${layoutMode === 'compact' ? 'bg-gold-500 text-black shadow-sm' : 'bg-transparent text-white/50 hover:text-white hover:bg-white/10'}`}>Compact</button>
-                        <button onClick={() => updateSnbChartState({ layoutMode: 'extended' })} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${layoutMode === 'extended' ? 'bg-gold-500 text-black shadow-sm' : 'bg-transparent text-white/50 hover:text-white hover:bg-white/10'}`}>Extended</button>
+                        <button onClick={() => updateSnbChartState({ layoutMode: 'linear' })} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${!isLogScale ? 'bg-gold-500 text-black shadow-sm' : 'bg-transparent text-white/50 hover:text-white hover:bg-white/10'}`}>Linear</button>
+                        <button onClick={() => updateSnbChartState({ layoutMode: 'logarithmic' })} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${isLogScale ? 'bg-gold-500 text-black shadow-sm' : 'bg-transparent text-white/50 hover:text-white hover:bg-white/10'}`}>Logarithmic</button>
                     </div>
                 </div>
                 {selectedCode && <button onClick={() => setSelectedCode(null)} className="text-xs font-black uppercase tracking-widest text-rose-400 hover:text-rose-300 px-4 py-2 bg-rose-500/10 rounded-xl border border-rose-500/20 transition-colors shadow-sm">Clear Selection</button>}
             </div>
             
-            {/* SVG WRAPPER */}
             <div className="w-full bg-black/20 rounded-3xl border border-white/5 pt-4 pb-2 relative overflow-x-auto select-none custom-scrollbar" onClick={() => setSelectedCode(null)}>
                 <svg viewBox={`0 0 ${width} ${gridBottomY + pad.bottom}`} style={{ minWidth: `800px`, transition: 'viewBox 0.3s ease' }} className="w-full h-auto overflow-visible font-sans">
                     {(() => {
-                        const rawStep = maxPointsVal / (windowSize === 'all' ? 20 : 15);
-                        const mag = Math.pow(10, Math.floor(Math.log10(rawStep || 1)));
-                        const step = Math.max(100, Math.ceil(rawStep / mag) * mag);
-                        const yLines = [0]; for(let v = step; v <= maxPointsVal; v += step) yLines.push(v);
+                        let yLines = [];
+                        if (isLogScale) {
+                            yLines = [0];
+                            const maxPow = Math.ceil(Math.log10(maxPointsVal));
+                            for (let i = 1; i <= maxPow; i++) yLines.push(Math.pow(10, i));
+                        } else {
+                            const rawStep = maxPointsVal / (windowSize === 'all' ? 20 : 15);
+                            const mag = Math.pow(10, Math.floor(Math.log10(rawStep || 1)));
+                            const step = Math.max(100, Math.ceil(rawStep / mag) * mag);
+                            yLines = [0]; for(let v = step; v <= maxPointsVal; v += step) yLines.push(v);
+                        }
                         return yLines.map((p, i) => (
                             <g key={`grid-${i}`}>
                                 <line x1={pad.left} y1={getY(p)} x2={width - pad.right + 20} y2={getY(p)} stroke={p === 0 ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.05)"} strokeWidth={p === 0 ? "2" : "1.5"} strokeDasharray={p === 0 ? "none" : "4 4"} />
-                                <text x={pad.left - 15} y={getY(p)} fill="rgba(255,255,255,0.3)" fontSize="12" fontWeight="bold" textAnchor="end" alignmentBaseline="middle">{Math.round(p).toLocaleString()}</text>
+                                <text x={pad.left - 15} y={getY(p)} fill="rgba(255,255,255,0.3)" fontSize="12" fontWeight="bold" textAnchor="end" alignmentBaseline="middle">{p === 0 ? 0 : Math.round(p).toLocaleString()}</text>
                             </g>
                         ));
                     })()}
@@ -728,7 +748,7 @@ export function TopNationsChart({ globalHistory, playersRaw, onNavigate }) {
                         const isHighlighted = selectedCode === line.code || hoveredCode === line.code;
                         const isFaded = (selectedCode || hoveredCode) && !isHighlighted;
                         return line.paths.map((pStr, pIdx) => (
-                            <path key={`path-${line.code}-${pIdx}`} d={pStr} fill="none" stroke={line.color} strokeWidth={isHighlighted ? cConf.stroke * 2 : cConf.stroke} opacity={isFaded ? 0.15 : 0.9} strokeLinejoin="round" strokeLinecap="round" className="cursor-pointer" onClick={(e) => { e.stopPropagation(); setSelectedCode(line.code === selectedCode ? null : line.code); }} onMouseEnter={() => setHoveredCode(line.code)} onMouseLeave={() => setHoveredCode(null)} style={{ filter: isHighlighted ? `drop-shadow(0 0 6px ${line.color}60)` : 'none' }} />
+                            <path key={`path-${line.code}-${pIdx}`} d={pStr} fill="none" stroke={line.color} strokeWidth={isHighlighted ? cConf.stroke * 2.5 : cConf.stroke} opacity={isFaded ? 0.15 : 0.9} strokeLinejoin="round" strokeLinecap="round" className="cursor-pointer" onClick={(e) => { e.stopPropagation(); setSelectedCode(line.code === selectedCode ? null : line.code); }} onMouseEnter={() => setHoveredCode(line.code)} onMouseLeave={() => setHoveredCode(null)} style={{ filter: isHighlighted ? `drop-shadow(0 0 6px ${line.color}60)` : 'none' }} />
                         ));
                     })}
                     
@@ -761,7 +781,6 @@ export function TopNationsChart({ globalHistory, playersRaw, onNavigate }) {
                                 
                                 <g transform={`translate(${lObj.endX + 20}, ${lObj.currentY})`} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); onNavigate('nations', null, null, line.code); }} onMouseEnter={() => setHoveredCode(line.code)} onMouseLeave={() => setHoveredCode(null)}>
                                     <rect x="0" y={-cConf.rectH/2} width={cConf.rectW} height={cConf.rectH} rx={cConf.rectH/2} fill="#000000" fillOpacity={isHighlighted ? "0.9" : "0.7"} stroke={line.color} strokeWidth={isHighlighted ? 2 : 1} style={{ filter: isHighlighted ? `drop-shadow(0 0 10px ${line.color}60)` : 'none' }} />
-                                    {/* Tighter X coordinates to match the smaller box */}
                                     <text x={6} y={cConf.font * 0.35} fontSize={12}>{getFlag(line.code)}</text>
                                     <text x={24} y={cConf.font * 0.35} fill={isHighlighted ? "#ffffff" : "rgba(255,255,255,0.8)"} fontSize={cConf.font} fontWeight="bold">{line.code}</text>
                                 </g>
@@ -779,7 +798,6 @@ export function NationPointsChart({ code, globalHistory, playersRaw, onNavigate 
     const [selectedId, setSelectedId] = useState(null);
     const [hoveredId, setHoveredId] = useState(null);
     
-    // NEW DEFAULTS: Hide Total, Show Average
     const [showTotal, setShowTotal] = useState(false);
     const [showAvg, setShowAvg] = useState(true);
 
@@ -789,8 +807,9 @@ export function NationPointsChart({ code, globalHistory, playersRaw, onNavigate 
         return () => __snbChartListeners.delete(l);
     }, []);
 
-    // Removed showDropped from state
     const { windowSize, offset, layoutMode } = __snbSharedChartState;
+    const isLogScale = layoutMode === 'logarithmic';
+
     const allHistory = globalHistory.filter(h => h.isMajorPlus);
     const N = allHistory.length;
 
@@ -818,10 +837,7 @@ export function NationPointsChart({ code, globalHistory, playersRaw, onNavigate 
 
     const width = 1200;
     const LABEL_GAP = 20; 
-    
-    // DYNAMIC HEIGHT: If layout is extended OR if showTotal is toggled ON, stretch the chart vertically!
-    const isExtended = layoutMode === 'extended' || showTotal;
-    let plotHeight = isExtended ? Math.max(1200, allNationPlayerIds.size * LABEL_GAP * 3) : 450;
+    const plotHeight = 450;
     
     const pad = { top: 40, right: 180, left: 80, bottom: 40 }; 
     const gridBottomY = pad.top + plotHeight;
@@ -849,7 +865,6 @@ export function NationPointsChart({ code, globalHistory, playersRaw, onNavigate 
         timelines.avg.push({ k, val: stepTotal / Math.max(1, activeCount) });
     }
 
-    // DYNAMIC Y-AXIS SCALING: Only scale based on what is currently VISIBLE
     let maxPointsVal = 10;
     if (showTotal) maxPointsVal = Math.max(maxPointsVal, ...timelines.total.map(t => t.val));
     if (showAvg) maxPointsVal = Math.max(maxPointsVal, ...timelines.avg.map(t => t.val));
@@ -859,11 +874,13 @@ export function NationPointsChart({ code, globalHistory, playersRaw, onNavigate 
     maxPointsVal = Math.ceil(maxPointsVal * 1.05);
 
     const getX = (i) => historyData.length <= 1 ? (pad.left + (width - pad.left - pad.right) / 2) : pad.left + (i * ((width - pad.left - pad.right) / (historyData.length - 1)));
-    const getY = (val) => gridBottomY - (val / Math.max(1, maxPointsVal)) * plotHeight;
+    const getY = (val) => {
+        if (isLogScale && val > 0) return getLogY(val, maxPointsVal, 10, plotHeight, gridBottomY);
+        return gridBottomY - (val / Math.max(1, maxPointsVal)) * plotHeight;
+    };
 
     const lines = [];
     
-    // BUILD TOTAL LINE
     if (showTotal) {
         const tSegs = []; let cSeg = [];
         timelines.total.forEach((pt, i) => {
@@ -874,7 +891,6 @@ export function NationPointsChart({ code, globalHistory, playersRaw, onNavigate 
         if (tSegs.length > 0) lines.push({ id: 'total', name: 'National Total', color: nationColor, isTotal: true, paths: tSegs.map(seg => seg.map((pt, i) => `${i===0?'M':'L'} ${pt.x} ${pt.y}`).join(' ')), segments: tSegs });
     }
 
-    // BUILD AVERAGE LINE
     if (showAvg) {
         const aSegs = []; let aCSeg = [];
         timelines.avg.forEach((pt, i) => {
@@ -882,10 +898,10 @@ export function NationPointsChart({ code, globalHistory, playersRaw, onNavigate 
             if (pt.val > 0) aCSeg.push(mapped); else if (aCSeg.length > 0) { aSegs.push(aCSeg); aCSeg = []; }
         });
         if (aCSeg.length > 0) aSegs.push(aCSeg);
-        if (aSegs.length > 0) lines.push({ id: 'avg', name: 'Player Average', color: '#cbd5e1', isTotal: true, isAvg: true, paths: aSegs.map(seg => seg.map((pt, i) => `${i===0?'M':'L'} ${pt.x} ${pt.y}`).join(' ')), segments: aSegs });
+        // FIX: isTotal changed to false so the average line is not overly thick
+        if (aSegs.length > 0) lines.push({ id: 'avg', name: 'Player Average', color: '#cbd5e1', isTotal: false, isAvg: true, paths: aSegs.map(seg => seg.map((pt, i) => `${i===0?'M':'L'} ${pt.x} ${pt.y}`).join(' ')), segments: aSegs });
     }
 
-    // BUILD PLAYER LINES
     Array.from(allNationPlayerIds).forEach(pid => {
         const p = playersRaw.find(x => x.id === pid);
         const pSegs = []; let pCSeg = [];
@@ -901,7 +917,6 @@ export function NationPointsChart({ code, globalHistory, playersRaw, onNavigate 
     const labels = [];
     lines.forEach(line => {
         const endPt = line.segments[line.segments.length - 1].slice(-1)[0];
-        // Dropped logic removed
         labels.push({ id: line.id, endX: endPt.x, endY: endPt.y, actualVal: endPt.val, line });
     });
     
@@ -912,22 +927,19 @@ export function NationPointsChart({ code, globalHistory, playersRaw, onNavigate 
         if (!placed) columns.push({ x: l.endX, labels: [l] });
     });
 
-    const physicsGap = isExtended ? LABEL_GAP : LABEL_GAP * 0.7;
-
     columns.forEach(col => {
         const colLabels = col.labels;
         colLabels.sort((a,b) => b.actualVal - a.actualVal);
         if (colLabels.length > 0) {
             colLabels[0].currentY = colLabels[0].endY;
-            for (let i = 1; i < colLabels.length; i++) colLabels[i].currentY = Math.max(colLabels[i].endY, colLabels[i-1].currentY + physicsGap);
+            for (let i = 1; i < colLabels.length; i++) colLabels[i].currentY = Math.max(colLabels[i].endY, colLabels[i-1].currentY + LABEL_GAP);
             if (colLabels[colLabels.length - 1].currentY > gridBottomY) {
                 colLabels[colLabels.length - 1].currentY = gridBottomY;
-                for (let i = colLabels.length - 2; i >= 0; i--) colLabels[i].currentY = Math.min(colLabels[i].currentY, colLabels[i+1].currentY - physicsGap);
+                for (let i = colLabels.length - 2; i >= 0; i--) colLabels[i].currentY = Math.min(colLabels[i].currentY, colLabels[i+1].currentY - LABEL_GAP);
             }
         }
     });
 
-    // Removed isDropped from sorting logic
     const sortedLines = [...lines].sort((a, b) => {
         const aH = a.id === selectedId || a.id === hoveredId, bH = b.id === selectedId || b.id === hoveredId;
         if (aH && !bH) return 1; if (!aH && bH) return -1;
@@ -956,10 +968,12 @@ export function NationPointsChart({ code, globalHistory, playersRaw, onNavigate 
                             <button onClick={() => updateSnbChartState({ offset: Math.max(0, safeOffset - windowSize) })} disabled={safeOffset <= 0} className="p-1 hover:bg-white/10 text-white/50 hover:text-white rounded-lg disabled:opacity-30 transition-colors"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
                         </div>
                     )}
-                    
                     <div className="w-px h-6 bg-white/10 hidden lg:block"></div>
-                    
-                    {/* NEW TOGGLES: Total & Average */}
+                    <div className="flex items-center gap-1.5 bg-black/40 p-1.5 rounded-xl border border-white/5 shadow-inner">
+                        <button onClick={() => updateSnbChartState({ layoutMode: 'linear' })} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${!isLogScale ? 'bg-gold-500 text-black shadow-sm' : 'bg-transparent text-white/50 hover:text-white hover:bg-white/10'}`}>Linear</button>
+                        <button onClick={() => updateSnbChartState({ layoutMode: 'logarithmic' })} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${isLogScale ? 'bg-gold-500 text-black shadow-sm' : 'bg-transparent text-white/50 hover:text-white hover:bg-white/10'}`}>Logarithmic</button>
+                    </div>
+                    <div className="w-px h-6 bg-white/10 hidden lg:block"></div>
                     <div className="flex items-center gap-1.5 bg-black/40 p-1.5 rounded-xl border border-white/5 shadow-inner">
                         <span className="text-[10px] text-white/30 uppercase tracking-widest font-black px-2 hidden sm:block">Lines</span>
                         <button onClick={() => setShowTotal(!showTotal)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${showTotal ? 'bg-white/20 text-white shadow-sm' : 'bg-transparent text-white/40 hover:text-white hover:bg-white/10'}`}>Total</button>
@@ -969,18 +983,24 @@ export function NationPointsChart({ code, globalHistory, playersRaw, onNavigate 
                 {selectedId && <button onClick={() => setSelectedId(null)} className="text-xs font-black uppercase tracking-widest text-rose-400 hover:text-rose-300 px-4 py-2 bg-rose-500/10 rounded-xl border border-rose-500/20 transition-colors shadow-sm">Clear Selection</button>}
             </div>
             
-            {/* SVG WRAPPER */}
             <div className="w-full bg-black/20 rounded-3xl border border-white/5 pt-4 pb-2 relative overflow-x-auto select-none custom-scrollbar" onClick={() => setSelectedId(null)}>
                 <svg viewBox={`0 0 ${width} ${gridBottomY + pad.bottom}`} style={{ minWidth: `800px`, transition: 'viewBox 0.3s ease' }} className="w-full h-auto overflow-visible font-sans">
                     {(() => {
-                        const rawStep = maxPointsVal / 12;
-                        const mag = Math.pow(10, Math.floor(Math.log10(rawStep || 1)));
-                        const step = Math.max(100, Math.ceil(rawStep / mag) * mag);
-                        const yLines = [0]; for(let v=step; v<=maxPointsVal; v+=step) yLines.push(v);
+                        let yLines = [];
+                        if (isLogScale) {
+                            yLines = [0];
+                            const maxPow = Math.ceil(Math.log10(maxPointsVal));
+                            for (let i = 1; i <= maxPow; i++) yLines.push(Math.pow(10, i));
+                        } else {
+                            const rawStep = maxPointsVal / 12;
+                            const mag = Math.pow(10, Math.floor(Math.log10(rawStep || 1)));
+                            const step = Math.max(10, Math.ceil(rawStep / mag) * mag);
+                            yLines = [0]; for(let v=step; v<=maxPointsVal; v+=step) yLines.push(v);
+                        }
                         return yLines.map((p, i) => (
                             <g key={`g-${i}`}>
-                                <line x1={pad.left} y1={getY(p)} x2={width - pad.right + 20} y2={getY(p)} stroke={i===0?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.05)"} strokeWidth={i===0?"2":"1.5"} strokeDasharray={i===0?"none":"4 4"} />
-                                <text x={pad.left - 15} y={getY(p)} fill="rgba(255,255,255,0.3)" fontSize="11" fontWeight="bold" textAnchor="end" alignmentBaseline="middle">{Math.round(p).toLocaleString()}</text>
+                                <line x1={pad.left} y1={getY(p)} x2={width - pad.right + 20} y2={getY(p)} stroke={p === 0 ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.05)"} strokeWidth={p === 0 ? "2" : "1.5"} strokeDasharray={p === 0 ? "none" : "4 4"} />
+                                <text x={pad.left - 15} y={getY(p)} fill="rgba(255,255,255,0.3)" fontSize="11" fontWeight="bold" textAnchor="end" alignmentBaseline="middle">{p === 0 ? 0 : Math.round(p).toLocaleString()}</text>
                             </g>
                         ));
                     })()}
@@ -997,9 +1017,13 @@ export function NationPointsChart({ code, globalHistory, playersRaw, onNavigate 
                         const lObj = labels.find(l => l.id === line.id);
                         const isHighlighted = selectedId === line.id || hoveredId === line.id;
                         const isFaded = (selectedId || hoveredId) && !isHighlighted;
+                        
+                        // Decide label visibility, but DO NOT return null here so ALL dots still render!
+                        const shouldShowLabel = line.isTotal || line.isAvg || isHighlighted;
 
                         return (
                             <g key={`o-${line.id}`} opacity={isFaded ? 0.2 : 1} style={{ transition: 'opacity 0.2s ease' }}>
+                                {/* 1. Render all the dots for this line */}
                                 {line.segments.map((seg, sI) => seg.map((pt, i) => {
                                     const isSolidDebut = pt.isDebut && sI === 0 && i === 0;
                                     const r = line.isTotal ? 3.5 : (isHighlighted ? 3 : 2);
@@ -1015,16 +1039,21 @@ export function NationPointsChart({ code, globalHistory, playersRaw, onNavigate 
                                     );
                                 }))}
                                 
-                                {Math.abs(lObj.currentY - lObj.endY) > 2 && <path d={`M ${lObj.endX} ${lObj.endY} C ${lObj.endX+15} ${lObj.endY}, ${lObj.endX+10} ${lObj.currentY}, ${lObj.endX+20} ${lObj.currentY}`} fill="none" stroke={line.color} strokeWidth="1.5" opacity="0.5" strokeDasharray="3 3" />}
-                                
-                                <g transform={`translate(${lObj.endX + 20}, ${lObj.currentY})`} className="cursor-pointer" onClick={(e) => { if (!line.isTotal) { e.stopPropagation(); onNavigate('players', line.id); } }} onMouseEnter={() => setHoveredId(line.id)} onMouseLeave={() => setHoveredId(null)}>
-                                    <rect x="0" y={-11} width={140} height={22} rx={11} fill="#000000" fillOpacity={isHighlighted ? "0.9" : "0.7"} stroke={line.color} strokeWidth={line.isTotal || isHighlighted ? 2 : 1} style={{ filter: isHighlighted ? `drop-shadow(0 0 10px ${line.color}60)` : 'none' }} />
-                                    
-                                    {line.isTotal ? <circle cx="11" cy="0" r="4" fill={line.color} /> : (line.img ? <image href={line.img} x="4" y="-7" width={14} height={14} preserveAspectRatio="xMidYMid slice" clipPath={`url(#clip-nat-${line.id})`} /> : <circle cx="11" cy="0" r="7" fill="#1e293b"/>)}
-                                    {line.img && <defs><clipPath id={`clip-nat-${line.id}`}><circle cx="11" cy="0" r="7" /></clipPath></defs>}
-                                    
-                                    <text x={26} y={4} fill={line.isTotal ? line.color : "#ffffff"} fontSize={10} fontWeight="bold">{line.name}</text>
-                                </g>
+                                {/* 2. Render the label ONLY if shouldShowLabel is true */}
+                                {shouldShowLabel && (
+                                    <g transform={`translate(${lObj.endX + 20}, ${
+                                            (line.isAvg || line.isTotal || isHighlighted)
+                                                ? lObj.endY
+                                                : lObj.currentY
+                                        })`} className="cursor-pointer" onClick={(e) => { if (!line.isTotal && !line.isAvg) { e.stopPropagation(); onNavigate('players', line.id); } }} onMouseEnter={() => setHoveredId(line.id)} onMouseLeave={() => setHoveredId(null)}>
+                                        <rect x="0" y={-11} width={140} height={22} rx={11} fill="#000000" fillOpacity={isHighlighted ? "0.95" : "0.7"} stroke={line.color} strokeWidth={line.isTotal || isHighlighted ? 2 : 1} style={{ filter: isHighlighted ? `drop-shadow(0 0 10px ${line.color}60)` : 'none' }} />
+                                        
+                                        {line.isTotal || line.isAvg ? <circle cx="11" cy="0" r="4" fill={line.color} /> : (line.img ? <image href={line.img} x="4" y="-7" width={14} height={14} preserveAspectRatio="xMidYMid slice" clipPath={`url(#clip-nat-${line.id})`} /> : <circle cx="11" cy="0" r="7" fill="#1e293b"/>)}
+                                        {line.img && <defs><clipPath id={`clip-nat-${line.id}`}><circle cx="11" cy="0" r="7" /></clipPath></defs>}
+                                        
+                                        <text x={26} y={4} fill={line.isTotal || line.isAvg ? line.color : "#ffffff"} fontSize={10} fontWeight="bold">{line.name}</text>
+                                    </g>
+                                )}
                             </g>
                         );
                     })}

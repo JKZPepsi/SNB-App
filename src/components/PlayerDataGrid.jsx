@@ -215,7 +215,7 @@ export function PlayerDataGrid({ players, tournaments, onSelectPlayer, onNavigat
                                         <div className="inline-flex items-center gap-4 opacity-80">
                                             <div className="h-px w-24 bg-white/20"></div>
                                             <span className="text-white/60 font-black uppercase tracking-widest text-[10px] flex items-center gap-2">
-                                                <Trophy size={14} className="text-white/40" /> Hall of Fame
+                                                <Trophy size={14} className="text-white/40" /> SNB Tour Alumni
                                             </span>
                                             <div className="h-px w-24 bg-white/20"></div>
                                         </div>

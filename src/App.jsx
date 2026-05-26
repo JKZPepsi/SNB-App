@@ -73,7 +73,7 @@ const TournamentBracketWrapper = ({ players, tournaments, db, appId, onNavigate,
     const t = tournaments.find(t => slugify(t.name) === slug || t.id === slug);
     useEffect(() => { document.title = t ? `${t.name} | SNB Tour` : 'SNB Tour'; return () => document.title = 'SNB Tour'; }, [t]);
     if (!t) return <Navigate to="/tournaments" />;
-    if (t.format === 'nations_league') return <SNBNationsBracket tournament={t} players={players} onBack={() => onNavigate('tournaments')} db={db} appId={appId} allTournaments={tournaments} onNavigate={onNavigate} isAdmin={isAdmin} />;
+    if (t.format === 'nations_league' || t.format === 'nations_league_v2') return <SNBNationsBracket tournament={t} players={players} onBack={() => onNavigate('tournaments')} db={db} appId={appId} allTournaments={tournaments} onNavigate={onNavigate} isAdmin={isAdmin} />;
     if (t.format === 'atp_finals' || t.format === 'pro_am') return <SNBInternationalsBracket tournament={t} players={players} onBack={() => onNavigate('tournaments')} db={db} appId={appId} allTournaments={tournaments} onNavigate={onNavigate} isAdmin={isAdmin} />;
     return <TournamentBracket tournament={t} allTournaments={tournaments} players={players} onBack={() => onNavigate('tournaments')} db={db} appId={appId} onNavigate={onNavigate} isAdmin={isAdmin} />;
 };

@@ -71,7 +71,7 @@ export const getTournamentPointsAndResult = (playerId, t) => {
 
     let pts = 0, w = 0, l = 0, played = false, resultStr = '', wonFinal = false;
 
-    if (t.format === 'nations_league') {
+    if (t.format === 'nations_league' || t.format === 'nations_league_v2') {
         const teams = getParsed(t, 'teams', []);
         const knockout = getParsed(t, 'bracket', [[],[],[]]);
         const groupMatches = getParsed(t, 'groupMatches', []);
@@ -98,7 +98,19 @@ export const getTournamentPointsAndResult = (playerId, t) => {
             allTies.forEach(tie => {
                 if (tie && tie.matches) {
                     tie.matches.forEach(m => {
-                        if (m && (m.p1 === playerId || m.p2 === playerId || m.p1b === playerId || m.p2b === playerId) && m.winner) {
+                        if (!m || !m.winner) return;
+                        
+                        let involved = false;
+                        // NEW V2 ARRAY CHECK
+                        if (Array.isArray(m.p1)) {
+                            if (m.p1.includes(playerId) || m.p2.includes(playerId)) involved = true;
+                        } 
+                        // LEGACY V1 CHECK
+                        else if (m.p1 === playerId || m.p2 === playerId || m.p1b === playerId || m.p2b === playerId) {
+                            involved = true;
+                        }
+                        
+                        if (involved) {
                             if (m.winner === myTeam.id) w++; else l++;
                         }
                     });
@@ -598,17 +610,22 @@ export const generateNationsDraw = (teamsList) => {
     const groupC = [t[2], t[5], t[10], t[13]];
     const groupD = [t[3], t[4], t[11], t[12]];
 
-    // Pure Singles Group Stage: 4 Required Matches + 1 Ace Decider Tiebreaker
-    const makeGroupTie = (t1, t2, idPrefix, groupName) => ({
-        id: idPrefix, group: groupName, t1, t2, winner: null, score: null, type: null,
-        matches: [
-            { mId: `${idPrefix}-m1`, name: 'Singles 4', p1: t1.players[3], p2: t2.players[3], winner: null, type: null },
-            { mId: `${idPrefix}-m2`, name: 'Singles 3', p1: t1.players[2], p2: t2.players[2], winner: null, type: null },
-            { mId: `${idPrefix}-m3`, name: 'Singles 2', p1: t1.players[1], p2: t2.players[1], winner: null, type: null },
-            { mId: `${idPrefix}-m4`, name: 'Singles 1 (Aces)', p1: t1.players[0], p2: t2.players[0], winner: null, type: null },
-            { mId: `${idPrefix}-m5`, name: 'Ace Decider (Tiebreaker)', p1: t1.players[0], p2: t2.players[0], winner: null, type: null }
-        ]
-    });
+    const makeGroupTie = (t1, t2, idPrefix, groupName) => {
+        const tie = { id: idPrefix, group: groupName, t1, t2, winner: null, score: null, type: null, matches: [] };
+        if (t1 && t2) {
+            const p1 = t1.players; const p2 = t2.players;
+            tie.matches = [
+                { mId: `${idPrefix}-m1`, name: 'Match 1 (2v2) - The Aces', p1: [p1[0], p1[1]], p2: [p2[0], p2[1]], winner: null, type: null },
+                { mId: `${idPrefix}-m2`, name: 'Match 2 (3v3) - The Core', p1: [p1[1], p1[2], p1[3]], p2: [p2[1], p2[2], p2[3]], winner: null, type: null },
+                { mId: `${idPrefix}-m3`, name: 'Match 3 (2v2) - The Depth', p1: [p1[3], p1[4]], p2: [p2[3], p2[4]], winner: null, type: null },
+                { mId: `${idPrefix}-m4`, name: 'Match 4 (3v3) - The Vanguard', p1: [p1[0], p1[2], p1[4]], p2: [p2[0], p2[2], p2[4]], winner: null, type: null },
+                { mId: `${idPrefix}-m5`, name: 'Match 5 (2v2) - The Midline', p1: [p1[1], p1[2]], p2: [p2[1], p2[2]], winner: null, type: null },
+                { mId: `${idPrefix}-m6`, name: 'Match 6 (3v3) - The Bench', p1: [p1[2], p1[3], p1[4]], p2: [p2[2], p2[3], p2[4]], winner: null, type: null },
+                { mId: `${idPrefix}-m7`, name: 'Match 7 (3v3) - All Out', p1: [p1[0], p1[1], p1[2]], p2: [p2[0], p2[1], p2[2]], winner: null, type: null },
+            ];
+        }
+        return tie;
+    };
 
     const makeGroupTies = (g, name) => [
         makeGroupTie(g[0], g[1], `${name}-1`, name), makeGroupTie(g[2], g[3], `${name}-2`, name),
@@ -616,24 +633,10 @@ export const generateNationsDraw = (teamsList) => {
         makeGroupTie(g[0], g[3], `${name}-5`, name), makeGroupTie(g[1], g[2], `${name}-6`, name)
     ];
 
-    // Pure Singles Knockout Stage: 8 Required Matches + 1 Ace Decider Tiebreaker
-    const emptyKnockoutTie = (idPrefix) => ({
-        id: idPrefix, group: 'knockout', t1: null, t2: null, winner: null, score: null, type: null,
-        matches: [
-            { mId: `${idPrefix}-m1`, name: 'Singles 4', p1: null, p2: null, winner: null, type: null },
-            { mId: `${idPrefix}-m2`, name: 'Singles 3', p1: null, p2: null, winner: null, type: null },
-            { mId: `${idPrefix}-m3`, name: 'Singles 2', p1: null, p2: null, winner: null, type: null },
-            { mId: `${idPrefix}-m4`, name: 'Singles 1 (Aces)', p1: null, p2: null, winner: null, type: null },
-            { mId: `${idPrefix}-m5`, name: 'Cross Singles (4v3)', p1: null, p2: null, winner: null, type: null },
-            { mId: `${idPrefix}-m6`, name: 'Cross Singles (3v4)', p1: null, p2: null, winner: null, type: null },
-            { mId: `${idPrefix}-m7`, name: 'Cross Singles (2v1)', p1: null, p2: null, winner: null, type: null },
-            { mId: `${idPrefix}-m8`, name: 'Cross Singles (1v2)', p1: null, p2: null, winner: null, type: null },
-            { mId: `${idPrefix}-m9`, name: 'Ace Decider (Tiebreaker)', p1: null, p2: null, winner: null, type: null }
-        ]
-    });
+    const emptyKnockoutTie = (idPrefix) => ({ id: idPrefix, group: 'knockout', t1: null, t2: null, winner: null, score: null, type: null, matches: [] });
 
     return {
-        format: 'nations_league', 
+        format: 'nations_league_v2', 
         teams: JSON.stringify(teamsList),
         groups: { A: groupA.map(x=>x.id), B: groupB.map(x=>x.id), C: groupC.map(x=>x.id), D: groupD.map(x=>x.id) },
         groupMatches: JSON.stringify([ ...makeGroupTies(groupA, 'A'), ...makeGroupTies(groupB, 'B'), ...makeGroupTies(groupC, 'C'), ...makeGroupTies(groupD, 'D') ]),

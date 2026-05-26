@@ -305,39 +305,87 @@ export function NationsView({ players, playersRaw, tournaments, onNavigate }) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-2 xl:px-4">
-                {nationStats.map((nat, idx) => (
-                    <div key={nat.code} onClick={() => onNavigate('nations', null, null, nat.code)} className="bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 p-6 hover:bg-white/10 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group shadow-lg hover:shadow-[0_15px_40px_rgba(0,0,0,0.4)] relative overflow-hidden">
-                        <div className="absolute -right-6 -bottom-6 text-9xl opacity-[0.03] group-hover:opacity-10 transition-opacity pointer-events-none drop-shadow-md">
-                            {getFlag(nat.code)}
-                        </div>
-                        <div className="flex justify-between items-start mb-6 relative z-10">
-                            <div className="flex items-center gap-4">
-                                <span className="text-4xl drop-shadow-md group-hover:scale-110 transition-transform duration-300">{getFlag(nat.code)}</span>
-                                <div>
-                                    <h3 className="text-xl font-black text-white leading-tight tracking-tight group-hover:text-sky-400 transition-colors">{getCountryName(nat.code)}</h3>
-                                    <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">{nat.code}</span>
+                {nationStats.map((nat, idx) => {
+                    const nationPlayers = players.filter(p => p.nationality === nat.code).sort((a, b) => a.rank - b.rank);
+                    const top5 = nationPlayers.slice(0, 5);
+
+                    // Calc Stars
+                    let nlStars = 0;
+                    tournaments.forEach(t => {
+                        if ((t.format === 'nations_league' || t.format === 'nations_league_v2') && t.status === 'completed') {
+                            try {
+                                const ko = typeof t.bracket === 'string' ? JSON.parse(t.bracket) : t.bracket;
+                                const finalRound = ko[ko.length - 1];
+                                const finalMatch = finalRound[finalRound.length - 1]; 
+                                if (finalMatch && finalMatch.winner) {
+                                    const tms = typeof t.teams === 'string' ? JSON.parse(t.teams) : t.teams;
+                                    const winnerTeam = tms.find(team => team.id === finalMatch.winner);
+                                    if (winnerTeam && winnerTeam.flags && winnerTeam.flags.includes(nat.code)) nlStars++;
+                                }
+                            } catch (e) {}
+                        }
+                    });
+
+                    // Calc Top 5 Form
+                    let majW = 0, majL = 0;
+                    top5.forEach(p => {
+                        const pMatches = [];
+                        tournaments.forEach(t => {
+                            const isMajorPlus = ['grand_slam', 'finals', 'major'].includes(t.tier || getTournamentTier(t));
+                            let mList = [];
+                            try { if (t.bracket) mList.push(...(typeof t.bracket === 'string' ? JSON.parse(t.bracket) : t.bracket).flat()); } catch (e) {}
+                            try { if (t.groupMatches) mList.push(...(typeof t.groupMatches === 'string' ? JSON.parse(t.groupMatches) : t.groupMatches).flat()); } catch (e) {}
+                            try { if (t.bracket_q) mList.push(...(typeof t.bracket_q === 'string' ? JSON.parse(t.bracket_q) : t.bracket_q).flat()); } catch (e) {}
+
+                            mList.forEach(m => {
+                                if (!m || !m.winner || m.type === 'bye') return;
+                                let involved = false;
+                                if (Array.isArray(m.p1)) { if (m.p1.includes(p.id) || m.p2.includes(p.id)) involved = true; } 
+                                else if (m.p1 === p.id || m.p2 === p.id) { involved = true; }
+                                if (involved) pMatches.push({ isWin: m.winner === p.id || (Array.isArray(m.winner) && m.winner.includes(p.id)) || (m.winner.startsWith('team') && m.type), isMajorPlus, date: t.completedAt || t.createdAt });
+                            });
+                        });
+                        
+                        pMatches.sort((a, b) => b.date - a.date);
+                        const majorMatches = pMatches.filter(m => m.isMajorPlus).slice(0, 5);
+                        majorMatches.forEach(m => { if (m.isWin) majW++; else majL++; });
+                    });
+
+                    const top5FormPct = (majW + majL) > 0 ? Math.round((majW / (majW + majL)) * 100) : 0;
+                    const activePlayersCount = nat.activePlayers; // ONLY the active player count.
+
+                    return (
+                        <div key={nat.code} onClick={() => onNavigate('nations', null, null, nat.code)} className="bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 p-6 hover:bg-white/10 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group shadow-lg hover:shadow-[0_15px_40px_rgba(0,0,0,0.4)] relative overflow-hidden">
+                            <div className="absolute top-5 right-5 flex gap-1 z-20">
+                                {Array.from({ length: nlStars }).map((_, i) => <span key={i} className="text-gold-400 text-xl drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]">★</span>)}
+                            </div>
+                            <div className="absolute -right-6 -bottom-6 text-9xl opacity-[0.03] group-hover:opacity-10 transition-opacity pointer-events-none drop-shadow-md">{getFlag(nat.code)}</div>
+                            <div className="flex justify-between items-start mb-6 relative z-10">
+                                <div className="flex items-center gap-4">
+                                    <span className="text-4xl drop-shadow-md group-hover:scale-110 transition-transform duration-300">{getFlag(nat.code)}</span>
+                                    <div>
+                                        <h3 className="text-xl font-black text-white leading-tight tracking-tight group-hover:text-sky-400 transition-colors">{getCountryName(nat.code)}</h3>
+                                        <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">{nat.code}</span>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="bg-black/40 px-3 py-1.5 rounded-xl border border-white/5 shadow-inner">
-                                <span className="text-gold-500 font-black text-lg">#{idx + 1}</span>
+                            <div className="space-y-2 relative z-10">
+                                <div className="flex justify-between items-center bg-black/20 p-3 rounded-xl border border-white/5 shadow-inner">
+                                    <span className="text-white/50 text-[11px] uppercase tracking-widest font-bold">Active Pts</span>
+                                    <span className="text-gold-400 font-black text-base drop-shadow-sm">{nat.points.toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between items-center bg-black/20 p-3 rounded-xl border border-white/5 shadow-inner">
+                                    <span className="text-white/50 text-[11px] uppercase tracking-widest font-bold">Active Players</span>
+                                    <span className="text-white font-black text-base">{activePlayersCount}</span>
+                                </div>
+                                <div className="flex justify-between items-center bg-black/20 p-3 rounded-xl border border-white/5 shadow-inner">
+                                    <span className="text-white/50 text-[11px] uppercase tracking-widest font-bold">Top 5 Form</span>
+                                    <span className="text-emerald-400 font-black text-sm">{top5FormPct}%</span>
+                                </div>
                             </div>
                         </div>
-                        <div className="space-y-2 relative z-10">
-                            <div className="flex justify-between items-center bg-black/20 p-3 rounded-xl border border-white/5 shadow-inner">
-                                <span className="text-white/50 text-[11px] uppercase tracking-widest font-bold">Active Pts</span>
-                                <span className="text-gold-400 font-black text-base drop-shadow-sm">{nat.points.toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between items-center bg-black/20 p-3 rounded-xl border border-white/5 shadow-inner">
-                                <span className="text-white/50 text-[11px] uppercase tracking-widest font-bold">Active Roster</span>
-                                <span className="text-white font-black text-base">{nat.activePlayers} <span className="text-white/30 text-xs font-bold">/ {nat.players}</span></span>
-                            </div>
-                            <div className="flex justify-between items-center bg-black/20 p-3 rounded-xl border border-white/5 shadow-inner">
-                                <span className="text-white/50 text-[11px] uppercase tracking-widest font-bold">Major Titles</span>
-                                <span className="text-white font-black text-base">{nat.titles}</span>
-                            </div>
-                        </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );
