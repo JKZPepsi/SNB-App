@@ -19,7 +19,7 @@ export const TOURNAMENT_TIERS = {
         points: { WINNER: 500, FINALIST: 300, SF: 180, QF: 90, R16: 45, R32: 20, R64: 10 }, 
         // FIX: Exclude Top 16, and use standard Wildcard math instead of 100% manual entry!
         excludeTop: 16, 
-        wcCount: { 32: 4, 16: 2 }, 
+        wcCount: { 32: 16, 16: 2 }, 
         color: 'text-rose-400', bg: 'bg-rose-500/20', border: 'border-rose-500/50', hex: '#f43f5e', shadowHover: 'hover:shadow-rose-500/20' 
     },
     'challenger_elite': { 

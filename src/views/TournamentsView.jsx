@@ -1047,8 +1047,11 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
     };
 
     const handleRandomize = () => {
-        const winnerId = Math.random() < 0.5 ? resolvingMatch.p1 : resolvingMatch.p2;
-        submitResult(winnerId, 'random');
+        const p1Pts = Math.sqrt(getPlayer(resolvingMatch.p1).points || 1);
+        const p2Pts = Math.sqrt(getPlayer(resolvingMatch.p2).points || 1);
+        const prob = p1Pts / (p1Pts + p2Pts);
+        const winner = Math.random() < prob ? resolvingMatch.p1 : resolvingMatch.p2;
+        submitResult(winner, 'random');
     };
 
     const handleSaveSettings = async (e) => {
@@ -1562,7 +1565,13 @@ export function SNBInternationalsBracket({ tournament, allTournaments = [], play
         setResolvingMatch(null);
     };
 
-    const handleRandomize = () => { const winnerId = Math.random() < 0.5 ? resolvingMatch.p1 : resolvingMatch.p2; submitResult(winnerId, 'random'); };
+    const handleRandomize = () => { 
+        const p1Pts = Math.sqrt(getPlayer(resolvingMatch.p1).points || 1);
+        const p2Pts = Math.sqrt(getPlayer(resolvingMatch.p2).points || 1);
+        const prob = p1Pts / (p1Pts + p2Pts);
+        const winner = Math.random() < prob ? resolvingMatch.p1 : resolvingMatch.p2;
+        submitResult(winner, 'random');
+    };
     
     const handleSaveSettings = async (e) => {
         e.preventDefault();
@@ -1980,9 +1989,11 @@ export function ResolveTeamSubMatchModal({ resolvingMatch, resolvingTie, setReso
     const is3v3 = resolvingMatch.p1.length === 3;
 
     const handleRandomize = () => {
-        const p1Pts = resolvingMatch.p1.reduce((sum, id) => sum + (getPlayer(id).points || 0), 0);
-        const p2Pts = resolvingMatch.p2.reduce((sum, id) => sum + (getPlayer(id).points || 0), 0);
-        const prob = p1Pts / (p1Pts + p2Pts || 1);
+        const p1Raw = resolvingMatch.p1.reduce((sum, id) => sum + (getPlayer(id).points || 0), 0);
+        const p2Raw = resolvingMatch.p2.reduce((sum, id) => sum + (getPlayer(id).points || 0), 0);
+        const p1Pts = Math.sqrt(p1Raw || 1);
+        const p2Pts = Math.sqrt(p2Raw || 1);
+        const prob = p1Pts / (p1Pts + p2Pts);
         const winningTeamId = Math.random() < prob ? resolvingTie.t1.id : resolvingTie.t2.id;
         submitResult(winningTeamId, 'random');
     };
