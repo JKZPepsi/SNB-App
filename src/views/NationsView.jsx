@@ -153,15 +153,14 @@ function NationAchievements({ code, players, tournaments, onNavigate }) {
     );
 }
 
-export function NationProfile({ code, players, onBack, onNavigate, playersRaw, tournaments }) {
+export function NationProfile({ code, players, onBack, onNavigate, playersRaw, tournaments, globalHistory }) {
     const { processedPlayers, stats } = useMemo(() => {
         const natPlayers = players.filter(p => (p.nationality || 'UNK') === code);
-        const globalHist = getGlobalHistory(playersRaw, tournaments);
         
         let activeList = natPlayers.filter(p => !p.retired).sort((a,b) => b.points - a.points || b.totalPoints - a.totalPoints);
         activeList.forEach((p, idx) => p.nationalRank = idx + 1);
         
-        const listWithDiffs = attachDiffsAndForm(natPlayers, globalHist);
+        const listWithDiffs = attachDiffsAndForm(natPlayers, globalHistory);
 
         let points = 0, bonusPoints = 0, wins = 0, losses = 0, titles = 0;
         activeList.forEach(p => {
@@ -183,22 +182,27 @@ export function NationProfile({ code, players, onBack, onNavigate, playersRaw, t
             }
         });
 
+        const peakData = {};
+        globalHistory.forEach(h => {
+            h.standings?.forEach(s => {
+                if (!peakData[s.id]) peakData[s.id] = { rank: 9999, pts: 0 };
+                if (s.rank > 0 && s.rank < peakData[s.id].rank) peakData[s.id].rank = s.rank;
+                if (s.pts > peakData[s.id].pts) peakData[s.id].pts = s.pts;
+            });
+        });
+
         const finalPlayers = listWithDiffs.map(p => {
             if (!p.retired) return p;
-            let peakRank = 9999, peakPoints = 0;
-            globalHist.forEach(h => {
-                const s = h.standings?.find(st => st.id === p.id);
-                if (s && s.rank > 0 && s.rank < peakRank) peakRank = s.rank;
-                if (s && s.pts > peakPoints) peakPoints = s.pts;
-            });
-            return { ...p, peakRank: peakRank === 9999 ? '-' : peakRank, peakPoints: peakPoints || p.points };
+            const pk = peakData[p.id] || {};
+            return { ...p, peakRank: pk.rank === 9999 || !pk.rank ? '-' : pk.rank, peakPoints: pk.pts || p.points };
         });
 
         return { 
             processedPlayers: finalPlayers, 
             stats: { points, bonusPoints, wins, losses, titles, activeCount: activeList.length, retiredCount: natPlayers.length - activeList.length }
         };
-    }, [players, code, playersRaw, tournaments]);
+    }, [players, code, playersRaw, tournaments, globalHistory]);
+
 
     return (
         <div className="max-w-7xl mx-auto pb-20 relative flex gap-8 items-start animate-in fade-in duration-300">
@@ -231,7 +235,7 @@ export function NationProfile({ code, players, onBack, onNavigate, playersRaw, t
                     </div>
                 </div>
 
-                <NationPointsChart code={code} globalHistory={getGlobalHistory(playersRaw, tournaments)} playersRaw={playersRaw} onNavigate={onNavigate} />
+                <NationPointsChart code={code} globalHistory={globalHistory} playersRaw={playersRaw} onNavigate={onNavigate} />
 
                 <div id="nation-roster" className="scroll-mt-8 space-y-6">
                     <h2 className="text-2xl font-black text-white flex items-center gap-3 tracking-tight"><PlayersIcon size={24} className="text-gold-500"/> National Roster</h2>
@@ -250,10 +254,22 @@ export function NationProfile({ code, players, onBack, onNavigate, playersRaw, t
     );
 }
 
-export function NationsView({ players, playersRaw, tournaments, onNavigate }) {
+export function NationsView({ players, playersRaw, tournaments, globalHistory, onNavigate }) {
     const safePlayers = playersRaw || players || [];
-    const globalHistory = useMemo(() => getGlobalHistory(safePlayers, tournaments), [safePlayers, tournaments]);
     
+    const parsedTournaments = useMemo(() => {
+        return tournaments.map(t => {
+            let b = Array.isArray(t.bracket) ? t.bracket : [];
+            let gm = []; try { gm = typeof t.groupMatches === 'string' ? JSON.parse(t.groupMatches) : (t.groupMatches || []); } catch(e) {}
+            let q = []; try { q = typeof t.bracket_q === 'string' ? JSON.parse(t.bracket_q) : (t.bracket_q || []); } catch(e) {}
+            return { 
+                ...t, 
+                flatMatches: [...b.flat(), ...gm.flat(), ...q.flat()].filter(Boolean),
+                isMajorPlus: ['grand_slam', 'finals', 'major'].includes(t.tier || getTournamentTier(t))
+            };
+        });
+    }, [tournaments]);
+
     const nationStats = useMemo(() => {
         const stats = {};
         
@@ -326,23 +342,17 @@ export function NationsView({ players, playersRaw, tournaments, onNavigate }) {
                         }
                     });
 
-                    // Calc Top 5 Form
+                    // Calc Top 5 Form (Massively Optimized)
                     let majW = 0, majL = 0;
                     top5.forEach(p => {
                         const pMatches = [];
-                        tournaments.forEach(t => {
-                            const isMajorPlus = ['grand_slam', 'finals', 'major'].includes(t.tier || getTournamentTier(t));
-                            let mList = [];
-                            try { if (t.bracket) mList.push(...(typeof t.bracket === 'string' ? JSON.parse(t.bracket) : t.bracket).flat()); } catch (e) {}
-                            try { if (t.groupMatches) mList.push(...(typeof t.groupMatches === 'string' ? JSON.parse(t.groupMatches) : t.groupMatches).flat()); } catch (e) {}
-                            try { if (t.bracket_q) mList.push(...(typeof t.bracket_q === 'string' ? JSON.parse(t.bracket_q) : t.bracket_q).flat()); } catch (e) {}
-
-                            mList.forEach(m => {
+                        parsedTournaments.forEach(t => {
+                            t.flatMatches.forEach(m => {
                                 if (!m || !m.winner || m.type === 'bye') return;
                                 let involved = false;
                                 if (Array.isArray(m.p1)) { if (m.p1.includes(p.id) || m.p2.includes(p.id)) involved = true; } 
                                 else if (m.p1 === p.id || m.p2 === p.id) { involved = true; }
-                                if (involved) pMatches.push({ isWin: m.winner === p.id || (Array.isArray(m.winner) && m.winner.includes(p.id)) || (m.winner.startsWith('team') && m.type), isMajorPlus, date: t.completedAt || t.createdAt });
+                                if (involved) pMatches.push({ isWin: m.winner === p.id || (Array.isArray(m.winner) && m.winner.includes(p.id)) || (m.winner.startsWith('team') && m.type), isMajorPlus: t.isMajorPlus, date: t.completedAt || t.createdAt });
                             });
                         });
                         

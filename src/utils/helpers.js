@@ -350,7 +350,7 @@ export const calculatePlayerRankings = (players, tournaments) => {
 
         allPlayed.forEach((pt, idx) => { pt.playedNumber = idx + 1; });
         let reversedPlayed = [...allPlayed].reverse();
-        let recentTournaments = []; let officialPoints = 0; let bonusPoints = 0; let majorCount = 0;
+        let recentTournaments = []; let officialPoints = 0; let majorCount = 0;
         let droppingPoints = 0;
 
         for (let pt of reversedPlayed) {
@@ -358,13 +358,14 @@ export const calculatePlayerRankings = (players, tournaments) => {
             if (isMajorPlus) {
                 if (majorCount < 20) {
                     majorCount++;
-                    if (pt.date <= globalLastMajorTime) officialPoints += pt.points; else bonusPoints += pt.points;
+                    officialPoints += pt.points;
                     recentTournaments.push(pt);
                     if (majorCount === 20) droppingPoints = pt.points;
                 }
             } else {
+                // Minor events count towards points, but don't eat into the 20 Major limit
                 if (majorCount < 20) {
-                    if (pt.date <= globalLastMajorTime) officialPoints += pt.points; else bonusPoints += pt.points;
+                    officialPoints += pt.points;
                     recentTournaments.push(pt);
                 }
             }
@@ -373,8 +374,8 @@ export const calculatePlayerRankings = (players, tournaments) => {
         return { 
             ...player, 
             points: officialPoints, 
-            bonusPoints: bonusPoints,
-            totalPoints: officialPoints + bonusPoints, 
+            bonusPoints: 0, // Deprecated, kept at 0 to avoid breaking UI components
+            totalPoints: officialPoints,
             careerPoints, 
             recentTournaments, 
             recentMatches: recentMatches.slice(-7).reverse(), 

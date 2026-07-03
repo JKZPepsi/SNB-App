@@ -5,7 +5,7 @@ import { IndividualPlayerChart } from '../components/Charts';
 import { getFlag, getCountryName, getTournamentTier, getTournamentPointsAndResult, getGlobalHistory, getSeedText, getOrdinalSuffix } from '../utils/helpers';
 import { TOURNAMENT_TIERS, ROUND_NAMES } from '../utils/constants';
 
-export function PlayerProfile({ player, players, playersRaw, onBack, tournaments, db, appId, onNavigate, isAdmin }) {
+export function PlayerProfile({ player, players, playersRaw, globalHistory, onBack, tournaments, db, appId, onNavigate, isAdmin }) {
     const [isEditing, setIsEditing] = useState(false);
     const [editName, setEditName] = useState('');
     const [editNationality, setEditNationality] = useState('');
@@ -122,7 +122,24 @@ export function PlayerProfile({ player, players, playersRaw, onBack, tournaments
                 });
             } else {
                 let parsedBracket = [];
+                let parsedQ = [];
                 try { parsedBracket = typeof t.bracket === 'string' ? JSON.parse(t.bracket) : (t.bracket || []); } catch(e){}
+                try { parsedQ = typeof t.bracket_q === 'string' ? JSON.parse(t.bracket_q) : (t.bracket_q || []); } catch(e){}
+
+                // INJECT QUALIFIER MATCHES INTO PLAYER HISTORY
+                if (Array.isArray(parsedQ)) {
+                    parsedQ.forEach((round, rIdx) => {
+                        if (!Array.isArray(round)) return;
+                        round.forEach(m => {
+                            if (m && (m.p1 === player.id || m.p2 === player.id) && m.winner && m.type !== 'bye') {
+                                const oppId = m.p1 === player.id ? m.p2 : m.p1;
+                                const oppName = players.find(p => p.id === oppId)?.name || 'Unknown';
+                                matches.push({ tournamentId: t.id, tournamentName: t.name, tier: getTournamentTier(t), roundName: `Qualifier R${rIdx + 1}`, roundIndex: rIdx - 5, opponentId: oppId, opponentName: oppName, isWin: m.winner === player.id, type: m.type, date: t.completedAt || t.createdAt });
+                            }
+                        });
+                    });
+                }
+
                 if (!Array.isArray(parsedBracket)) return;
                 
                 parsedBracket.forEach((round, rIdx) => {
@@ -191,8 +208,7 @@ export function PlayerProfile({ player, players, playersRaw, onBack, tournaments
 
     const rankingHistory = useMemo(() => {
         if (!player) return [];
-        const globalHist = getGlobalHistory(playersRaw, tournaments);
-        return globalHist.map(h => {
+        return globalHistory.map(h => {
             const pStanding = h.standings.find(s => s.id === player.id);
             const ach = achievements.find(a => a.tournamentId === h.tournamentId);
             

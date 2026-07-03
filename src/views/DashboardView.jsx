@@ -4,46 +4,49 @@ import { PlayerDataGrid } from '../components/PlayerDataGrid';
 import { calculatePlayerRankings, getGlobalHistory, attachDiffsAndForm } from '../utils/helpers';
 import { COUNTRIES } from '../utils/constants';
 
-export function DashboardView({ playersRaw, tournaments, onSelectPlayer, players , isAdmin}) {
+export function DashboardView({ playersRaw, tournaments, globalHistory, onSelectPlayer, players , isAdmin}) {
     const [asOfId, setAsOfId] = useState('');
     const [filterCountry, setFilterCountry] = useState('All');
 
     const { processedPlayers } = useMemo(() => {
         const targetT = asOfId ? tournaments.find(t => t.id === asOfId) : null;
-        const completedAsc = tournaments.filter(t => t.status === 'completed').sort((a, b) => (a.completedAt || 0) - (b.completedAt || 0));
-        const filteredTournaments = targetT 
-            ? completedAsc.filter(t => (t.completedAt || 0) <= (targetT.completedAt || 0))
-            : completedAsc;
         
-        const rankedPlayers = calculatePlayerRankings(playersRaw, filteredTournaments);
-        const globalHist = getGlobalHistory(playersRaw, filteredTournaments);
-
-        // Assign absolute global rank before any filtering
-        rankedPlayers.forEach((p, i) => { if (!p.retired) p.currentRank = i + 1; });
+        let rankedPlayers;
+        if (targetT) {
+            const completedAsc = tournaments.filter(t => t.status === 'completed').sort((a, b) => (a.completedAt || 0) - (b.completedAt || 0));
+            const filteredTournaments = completedAsc.filter(t => (t.completedAt || 0) <= (targetT.completedAt || 0));
+            rankedPlayers = calculatePlayerRankings(playersRaw, filteredTournaments);
+            rankedPlayers.forEach((p, i) => { if (!p.retired) p.currentRank = i + 1; });
+        } else {
+            // MASSIVE SPEEDUP: Use pre-calculated players if viewing 'Live'
+            rankedPlayers = players;
+        }
 
         let filteredList = rankedPlayers;
         if (filterCountry !== 'All') {
             filteredList = filteredList.filter(p => p.nationality === filterCountry);
         }
 
-        const listWithDiffs = attachDiffsAndForm(filteredList, globalHist);
+        const listWithDiffs = attachDiffsAndForm(filteredList, globalHistory);
 
-        // Calculate Peaks for retirees
+        // SPEEDUP: Pre-build the peaks map ONCE instead of looping per-player
+        const peakData = {};
+        globalHistory.forEach(h => {
+            h.standings?.forEach(s => {
+                if (!peakData[s.id]) peakData[s.id] = { rank: 9999, pts: 0 };
+                if (s.rank > 0 && s.rank < peakData[s.id].rank) peakData[s.id].rank = s.rank;
+                if (s.pts > peakData[s.id].pts) peakData[s.id].pts = s.pts;
+            });
+        });
+
         const finalPlayers = listWithDiffs.map(p => {
             if (!p.retired) return p;
-            let peakRank = 9999, peakPoints = 0;
-            globalHist.forEach(h => {
-                const s = h.standings?.find(st => st.id === p.id);
-                if (s) {
-                    if (s.rank > 0 && s.rank < peakRank) peakRank = s.rank;
-                    if (s.pts > peakPoints) peakPoints = s.pts;
-                }
-            });
-            return { ...p, peakRank: peakRank === 9999 ? '-' : peakRank, peakPoints: peakPoints || p.points };
+            const pk = peakData[p.id] || {};
+            return { ...p, peakRank: pk.rank === 9999 || !pk.rank ? '-' : pk.rank, peakPoints: pk.pts || p.points };
         });
 
         return { processedPlayers: finalPlayers };
-    }, [playersRaw, tournaments, asOfId, filterCountry]);
+    }, [playersRaw, tournaments, asOfId, filterCountry, globalHistory, players]);
 
     // Options for the Country Filter
     const activeCodes = Array.from(new Set(playersRaw.map(p => p.nationality))).filter(Boolean);

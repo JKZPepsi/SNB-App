@@ -4,8 +4,7 @@ import { FloatingChartNav } from '../components/SharedUI';
 import { TopPlayersChart, __snbSharedChartState, __snbChartListeners } from '../components/Charts';
 import { getGlobalHistory } from '../utils/helpers';
 
-export function AnalyticsView({ playersRaw, tournaments, players, onNavigate }) {
-    const globalHistory = useMemo(() => getGlobalHistory(playersRaw, tournaments), [playersRaw, tournaments]);
+export function AnalyticsView({ globalHistory, playersRaw, tournaments, players, onNavigate }) {
     const [, setTick] = useState(0);
 
     useEffect(() => {

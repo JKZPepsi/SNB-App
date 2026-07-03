@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, Plus, X, TournamentsIcon, Settings, ArrowLeft, Trophy, Shuffle, NationsIcon, DynamicTrophy, History, UserCircle, CheckCircle, Shield } from '../components/Icons';
+import { Search, Plus, X, TournamentsIcon, Settings, ArrowLeft, Trophy, Shuffle, NationsIcon, DynamicTrophy, History, UserCircle, CheckCircle, Shield, AnalyticsIcon } from '../components/Icons';
 import { GlassDropdown, GlassTabs, CountrySelect, PlayerMedia, TierBadge } from '../components/SharedUI';
 import { getFlag, getCountryName, getTournamentTier, getDrawSize, getSeedText, generateKnockoutDraw, generateATPFinalsDraw, generateProAmDraw, generateNationsDraw, calcGroupStandings, generateQualifyingDraw } from '../utils/helpers';
 import { TOURNAMENT_TIERS, ROUND_NAMES } from '../utils/constants';
@@ -169,6 +169,7 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
     const [location, setLocation] = useState(''); 
     const [tier, setTier] = useState('challenger');
     const [size, setSize] = useState(16);
+    const [manualQualifiers, setManualQualifiers] = useState(false);
     
     const [selectedWildcards, setSelectedWildcards] = useState([]);
     const [withdrawnIds, setWithdrawnIds] = useState([]);
@@ -196,7 +197,13 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
                 const active = players.filter(p => !p.retired).sort((a,b) => a.rank - b.rank);
                 const byNat = {};
                 active.forEach(p => { if(!byNat[p.nationality]) byNat[p.nationality] = []; byNat[p.nationality].push(p); });
-                const valid = Object.entries(byNat).filter(([k,v]) => v.length >= 5).sort((a,b) => a[1][0].rank - b[1][0].rank).slice(0, 4);
+
+                // BALANCED NATION EVALUATION: Sort using the entire active national point contribution pool
+                const valid = Object.entries(byNat).filter(([k,v]) => v.length >= 5).sort((a,b) => {
+                    const ptsA = a[1].reduce((sum, p) => sum + (p.points||0), 0);
+                    const ptsB = b[1].reduce((sum, p) => sum + (p.points||0), 0);
+                    return ptsB - ptsA;
+                }).slice(0, 4);
                 
                 const newTeams = [...prev];
                 valid.forEach((nat, i) => {
@@ -284,10 +291,10 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
         return [16, 32, 64, 128]; 
     }, [tier]);
 
-    // Force Qualifiers ONLY for Grand Slams (Removes the manual toggle)
-    const useQualifiers = tier === 'grand_slam';
+    // Force Qualifiers for Grand Slams, or allow manual toggle for 32-man Majors
+    const useQualifiers = tier === 'grand_slam' || (tier === 'major' && size === 32 && manualQualifiers);
 
-    useEffect(() => { 
+    useEffect(() => {
         if (!editingId && !allowedSizes.includes(size)) setSize(allowedSizes[0]);
         if (!editingId) { setSelectedWildcards([]); setWithdrawnIds([]); setErrorMsg(''); }
     }, [tier, allowedSizes, size, editingId]);
@@ -311,12 +318,32 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
         .sort((a, b) => a.rank - b.rank);
     
     let reqWc = tierConf.wcCount?.[size] || 0;
-    if (tier === 'challenger') {
-        reqWc = size; 
-    }
+        if (tier === 'challenger') reqWc = size; 
+        if (tier === 'pro') reqWc = size / 2;
+        if (tier === 'major' && size === 128) reqWc = 32; // Mathematical parity extension for 128 size
 
-    const reqQ = useQualifiers ? 16 : 0;
-    const reqAuto = Math.max(0, size - reqWc - reqQ);
+        const reqQ = useQualifiers ? 16 : 0;
+        const reqAuto = Math.max(0, size - reqWc - reqQ);
+
+    const selectMomentumWildcards = () => {
+        const targetToAdd = Math.floor(reqWc / 2);
+        const remainingCapacity = reqWc - selectedWildcards.length;
+        const toAdd = Math.min(targetToAdd, remainingCapacity);
+        
+        if (toAdd <= 0) return;
+
+        const availablePlayers = remainingPlayers.filter(p => !selectedWildcards.includes(p.id));
+        
+        const withMomentum = availablePlayers.map(p => {
+            const matches = p.recentMatches || [];
+            const wins = matches.filter(m => m.isWin).length;
+            const winRate = matches.length > 0 ? wins / matches.length : 0;
+            return { id: p.id, winRate, rank: p.rank };
+        }).sort((a, b) => b.winRate - a.winRate || a.rank - b.rank);
+
+        const hotStreakSelections = withMomentum.slice(0, toAdd).map(p => p.id);
+        setSelectedWildcards([...selectedWildcards, ...hotStreakSelections]);
+    };
     
     const autoQualifiers = eligiblePlayers.slice(0, reqAuto);
     const remainingPlayers = eligiblePlayers.slice(reqAuto); // WC and Q players come from here!
@@ -567,6 +594,12 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
                             <li>Champion receives <strong className="text-white">{expectedWinnerPoints.toLocaleString()} points</strong>.</li>
                             <li>{tierConf.excludeTop > 0 ? `Top ${tierConf.excludeTop} globally ranked players are excluded from entry.` : (tier === 'finals' ? 'Exclusive Round Robin format for the Top 8 globally ranked players.' : 'Open Entry. Selection strictly based on global rank.')}</li>
                             {tier === 'grand_slam' && <li><strong className="text-indigo-400">16 slots</strong> are automatically reserved for the Qualifying Bracket.</li>}
+                            {tier === 'major' && size === 32 && (
+                                <li className="flex items-center gap-2 mt-2">
+                                    <input type="checkbox" checked={manualQualifiers} onChange={(e) => setManualQualifiers(e.target.checked)} className="accent-indigo-500 w-4 h-4 cursor-pointer" />
+                                    <span>Enable <strong className="text-indigo-400">16-Player Qualifying Bracket</strong> for bottom seeds.</span>
+                                </li>
+                            )}
                             {reqWc > 0 && <li>Draw reserves <strong className="text-gold-400">{reqWc} Wildcard/Participant slots</strong> for manual entry.</li>}
                         </ul>
                     </div>
@@ -673,10 +706,20 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
                                                             <button onClick={() => withdrawTopN(Math.max(1, Math.floor(remainingPlayers.length / 2)))} className="text-[9px] uppercase tracking-wider font-black bg-[#be123c]/20 text-[#fb7185] hover:bg-[#be123c] hover:text-white px-2.5 py-1.5 rounded-lg transition-colors border border-[#be123c]/40 backdrop-blur-md shadow-sm">Drop Top Half</button>
                                                         </>
                                                     )}
-                                                    {selectedWildcards.length < reqWc && reqWc > 0 && (
-                                                        <button onClick={selectRandomWildcards} className="text-[10px] flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg transition-colors border border-white/20 font-bold shadow-sm backdrop-blur-md">
-                                                            <Shuffle size={12} /> Auto-Fill
+                                                    {reqWc > 0 && (
+                                                        <button onClick={() => setSelectedWildcards([])} className="text-[10px] flex items-center gap-1 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white px-2.5 py-1.5 rounded-lg transition-colors border border-white/10 font-bold shadow-sm backdrop-blur-md">
+                                                            <X size={12} /> Clear
                                                         </button>
+                                                    )}
+                                                    {selectedWildcards.length < reqWc && reqWc > 0 && (
+                                                        <>
+                                                            <button onClick={selectMomentumWildcards} className="text-[10px] flex items-center gap-1.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 px-3 py-1.5 rounded-lg transition-colors border border-orange-500/30 font-bold shadow-sm backdrop-blur-md">
+                                                                <AnalyticsIcon size={12} /> Hot Streak
+                                                            </button>
+                                                            <button onClick={selectRandomWildcards} className="text-[10px] flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg transition-colors border border-white/20 font-bold shadow-sm backdrop-blur-md">
+                                                                <Shuffle size={12} /> Random-Fill
+                                                            </button>
+                                                        </>
                                                     )}
                                                     <span className={`text-[11px] px-3 py-1.5 rounded-lg font-black tracking-widest border shadow-sm backdrop-blur-md ${selectedWildcards.length === reqWc ? 'bg-[#059669]/20 text-[#34d399] border-[#059669]/40' : 'bg-gold-500/20 text-gold-400 border-gold-500/30'}`}>
                                                         {selectedWildcards.length} / {reqWc}
@@ -1319,12 +1362,25 @@ export function TournamentBracket({ tournament, allTournaments = [], players, on
                         <div className="flex-1 overflow-auto custom-scrollbar relative z-10 flex flex-col" ref={scrollContainerRef}>
                             
                             <div className="flex min-w-max sticky top-0 z-40 bg-black/50 backdrop-blur-3xl border-b border-white/10 py-3 px-8 shadow-xl">
-                                {activeBracket.map((round, rIdx) => {
-                                    if (!round.some((_, mIdx) => shouldShowMatch(activeTab, rIdx, mIdx, round.length))) return null;
-                                    const isFinalRound = rIdx === totalRounds - 1;
-                                    
-                                    const roundName = rIdx === 2 ? 'Final' : (rIdx === 1 ? 'Semifinals' : 'Quarterfinals');
-                                        const showHeaderTrophy = isFinalRound && round[0] && tournament.format === 'atp_finals';
+                                        {activeBracket.map((round, rIdx) => {
+                                            if (!round.some((_, mIdx) => shouldShowMatch(activeTab, rIdx, mIdx, round.length))) return null;
+                                            const isFinalRound = rIdx === totalRounds - 1;
+                                            
+                                            let roundName = '';
+                                            if (masterView === 'qualifiers') {
+                                                roundName = `Qualifying Round ${rIdx + 1}`;
+                                            } else {
+                                                const dist = totalRounds - 1 - rIdx;
+                                                if (dist === 0) roundName = 'Final';
+                                                else if (dist === 1) roundName = 'Semifinals';
+                                                else if (dist === 2) roundName = 'Quarterfinals';
+                                                else if (dist === 3) roundName = 'Round of 16';
+                                                else if (dist === 4) roundName = 'Round of 32';
+                                                else if (dist === 5) roundName = 'Round of 64';
+                                                else if (dist === 6) roundName = 'Round of 128';
+                                                else roundName = `Round ${rIdx + 1}`;
+                                            }
+                                            const showHeaderTrophy = isFinalRound && round[0] && tournament.format === 'atp_finals';
                                         
                                         return (
                                             <div key={`header-${rIdx}`} className="w-56 shrink-0 mr-12 text-center flex flex-col items-center justify-end min-h-[40px]">

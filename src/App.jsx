@@ -53,19 +53,19 @@ class ErrorBoundary extends React.Component {
 }
 
 // --- ROUTER WRAPPERS ---
-const PlayerProfileWrapper = ({ players, playersRaw, tournaments, db, appId, onNavigate, isAdmin }) => {
+const PlayerProfileWrapper = ({ players, playersRaw, tournaments, globalHistory, db, appId, onNavigate, isAdmin }) => {
     const { slug } = useParams();
     const player = players.find(p => slugify(p.name) === slug || p.id === slug);
     useEffect(() => { document.title = player ? `${player.name} | SNB Tour` : 'SNB Tour'; return () => document.title = 'SNB Tour'; }, [player]);
     if (!player) return <Navigate to="/players" />;
-    return <PlayerProfile player={player} players={players} playersRaw={playersRaw} onBack={() => onNavigate('players')} tournaments={tournaments} db={db} appId={appId} onNavigate={onNavigate} isAdmin={isAdmin} />;
+    return <PlayerProfile player={player} players={players} playersRaw={playersRaw} globalHistory={globalHistory} onBack={() => onNavigate('players')} tournaments={tournaments} db={db} appId={appId} onNavigate={onNavigate} isAdmin={isAdmin} />;
 };
 
-const NationProfileWrapper = ({ players, playersRaw, tournaments, onNavigate, isAdmin }) => {
+const NationProfileWrapper = ({ players, playersRaw, tournaments, globalHistory, onNavigate, isAdmin }) => {
     const { code } = useParams();
     const cleanCode = code.toUpperCase();
     useEffect(() => { document.title = `${cleanCode} | SNB Nations`; return () => document.title = 'SNB Tour'; }, [cleanCode]);
-    return <NationProfile code={cleanCode} players={players} onBack={() => onNavigate('nations')} onNavigate={onNavigate} playersRaw={playersRaw} tournaments={tournaments} isAdmin={isAdmin} />;
+    return <NationProfile code={cleanCode} players={players} onBack={() => onNavigate('nations')} onNavigate={onNavigate} playersRaw={playersRaw} tournaments={tournaments} globalHistory={globalHistory} isAdmin={isAdmin} />;
 };
 
 const TournamentBracketWrapper = ({ players, tournaments, db, appId, onNavigate, isAdmin }) => {
@@ -158,8 +158,17 @@ export default function App() {
         ranked.forEach(p => { if (!p.retired) { p.currentRank = activeIdx++; } });
         return ranked;
     }, [playersRaw, tournaments]);
+
+    const globalHistory = useMemo(() => {
+        if (!playersRaw.length || !tournaments.length) return [];
+        return getGlobalHistory(playersRaw, tournaments);
+    }, [playersRaw, tournaments]);
     
     const handleNavigate = (tab, playerId = null, tournamentId = null, nationCode = null) => {
+        // RECORD SCROLL: Save the exact pixel depth before destroying the view
+        const scrollArea = document.querySelector('main .custom-scrollbar');
+        if (scrollArea) sessionStorage.setItem(`scroll-${location.pathname}`, scrollArea.scrollTop);
+
         let path = `/${tab}`;
         if (tab === 'players' && playerId) {
             const p = players.find(x => x.id === playerId);
@@ -174,11 +183,18 @@ export default function App() {
             path = tournamentId ? `/edit-tournament/${t ? slugify(t.name) : tournamentId}` : `/create-tournament`;
         }
         navigate(path);
-        setTimeout(() => {
-            const scrollArea = document.querySelector('main .custom-scrollbar');
-            if (scrollArea) scrollArea.scrollTo({ top: 0, behavior: 'instant' });
-        }, 10);
     };
+
+    // RESTORE SCROLL: When the URL changes, wait a paint cycle and inject the saved pixel depth
+    useEffect(() => {
+        const scrollArea = document.querySelector('main .custom-scrollbar');
+        if (scrollArea) {
+            const savedScroll = sessionStorage.getItem(`scroll-${location.pathname}`);
+            requestAnimationFrame(() => {
+                scrollArea.scrollTo({ top: savedScroll ? parseInt(savedScroll, 10) : 0, behavior: 'instant' });
+            });
+        }
+    }, [location.pathname]);
 
     // --- EMAIL/PASSWORD LOGIN LOGIC ---
     const handleLoginSubmit = async (e) => {
@@ -235,14 +251,14 @@ export default function App() {
                         <Routes>
                             <Route path="/" element={<Navigate to="/dashboard" replace />} />
                             
-                            <Route path="/dashboard" element={<DashboardView playersRaw={playersRaw} tournaments={tournaments} onSelectPlayer={(id) => handleNavigate('players', id)} players={players} isAdmin={isAdmin} />} />
-                            <Route path="/analytics" element={<AnalyticsView playersRaw={playersRaw} tournaments={tournaments} players={players} onNavigate={handleNavigate} isAdmin={isAdmin} />} />
+                            <Route path="/dashboard" element={<DashboardView playersRaw={playersRaw} tournaments={tournaments} globalHistory={globalHistory} onSelectPlayer={(id) => handleNavigate('players', id)} players={players} isAdmin={isAdmin} />} />
+                            <Route path="/analytics" element={<AnalyticsView globalHistory={globalHistory} playersRaw={playersRaw} tournaments={tournaments} players={players} onNavigate={handleNavigate} isAdmin={isAdmin} />} />
                             
-                            <Route path="/nations" element={<NationsView players={players} playersRaw={playersRaw} tournaments={tournaments} onNavigate={handleNavigate} isAdmin={isAdmin} />} />
-                            <Route path="/nations/:code" element={<NationProfileWrapper players={players} playersRaw={playersRaw} tournaments={tournaments} onNavigate={handleNavigate} isAdmin={isAdmin} />} />
+                            <Route path="/nations" element={<NationsView players={players} playersRaw={playersRaw} tournaments={tournaments} globalHistory={globalHistory} onNavigate={handleNavigate} isAdmin={isAdmin} />} />
+                            <Route path="/nations/:code" element={<NationProfileWrapper players={players} playersRaw={playersRaw} tournaments={tournaments} globalHistory={globalHistory} onNavigate={handleNavigate} isAdmin={isAdmin} />} />
                             
                             <Route path="/players" element={<PlayersView players={players} onSelectPlayer={(id) => handleNavigate('players', id)} db={db} appId={appId} isAdmin={isAdmin} />} />
-                            <Route path="/players/:slug" element={<PlayerProfileWrapper players={players} playersRaw={playersRaw} tournaments={tournaments} db={db} appId={appId} onNavigate={handleNavigate} isAdmin={isAdmin} />} />
+                            <Route path="/players/:slug" element={<PlayerProfileWrapper players={players} playersRaw={playersRaw} tournaments={tournaments} globalHistory={globalHistory} db={db} appId={appId} onNavigate={handleNavigate} isAdmin={isAdmin} />} />
                             
                             <Route path="/tournaments" element={<TournamentsView tournaments={tournaments} onSelect={(id) => handleNavigate('tournaments', null, id)} onCreate={() => handleNavigate('create_tournament')} onEdit={(id) => handleNavigate('create_tournament', null, id)} isAdmin={isAdmin} />} />
                             <Route path="/tournaments/:slug" element={<TournamentBracketWrapper players={players} tournaments={tournaments} db={db} appId={appId} onNavigate={handleNavigate} isAdmin={isAdmin} />} />
