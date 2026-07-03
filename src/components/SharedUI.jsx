@@ -313,13 +313,13 @@ export function CountrySelect({ value, onChange, disabled, allowedCodes = null, 
         const statsA = nationStats[a.code] || { activePlayers: 0, points: 0 };
         const statsB = nationStats[b.code] || { activePlayers: 0, points: 0 };
         
-        // Group players into tiers (4+ is the top tier)
-        const getTier = (count) => count >= 4 ? 4 : count;
+        // Group players into tiers (5+ is the top tier, as Nations League requires 5)
+        const getTier = (count) => count >= 5 ? 5 : count;
         const tierA = getTier(statsA.activePlayers);
         const tierB = getTier(statsB.activePlayers);
         
         if (tierA !== tierB) return tierB - tierA; // Higher tier comes first
-        return statsB.points - statsA.points; // If same tier, sort by total points
+        return statsB.points - statsA.points; // If same tier, sort strictly by total points
     });
     
     const selectedCountry = COUNTRIES.find(c => c.code === value);
@@ -348,7 +348,7 @@ export function CountrySelect({ value, onChange, disabled, allowedCodes = null, 
                                 <div className="flex flex-col min-w-0">
                                     <span className="font-bold text-sm truncate">{c.name} <span className="text-[10px] text-white/40 ml-1 tracking-widest">{c.code}</span></span>
                                     {stats && (
-                                        <span className={`text-[10px] font-bold mt-0.5 ${stats.activePlayers >= 4 ? 'text-gold-400' : 'text-white/40'}`}>
+                                        <span className={`text-[10px] font-bold mt-0.5 ${stats.activePlayers >= 5 ? 'text-gold-400' : 'text-white/40'}`}>
                                             {stats.activePlayers} Active Players <span className="text-white/20 mx-1">•</span> {stats.points.toLocaleString()} Pts
                                         </span>
                                     )}
