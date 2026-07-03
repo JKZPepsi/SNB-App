@@ -311,11 +311,13 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
     
     const expectedWinnerPoints = Math.round(tierConf.points.WINNER * sizeMultiplier);
         
-    const activePlayers = players.filter(p => !p.retired);
+    const activePlayers = useMemo(() => players.filter(p => !p.retired), [players]);
 
-    const eligiblePlayers = [...activePlayers]
-        .filter(p => p.rank > tierConf.excludeTop && !withdrawnIds.includes(p.id))
-        .sort((a, b) => a.rank - b.rank);
+    const eligiblePlayers = useMemo(() => {
+        return [...activePlayers]
+            .filter(p => p.rank > tierConf.excludeTop && !withdrawnIds.includes(p.id))
+            .sort((a, b) => a.rank - b.rank);
+    }, [activePlayers, tierConf.excludeTop, withdrawnIds]);
     
     let reqWc = tierConf.wcCount?.[size] || 0;
         if (tier === 'challenger') reqWc = size; 
@@ -387,9 +389,9 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
         setSelectedWildcards([...selectedWildcards, ...shuffled.slice(0, needed)]);
     };
 
-    const filteredRemaining = remainingPlayers.filter(p => p.name.toLowerCase().includes(wcSearch.toLowerCase()) || (p.nationality || '').toLowerCase().includes(wcSearch.toLowerCase()));
-    const filteredAuto = autoQualifiers.filter(p => p.name.toLowerCase().includes(autoSearch.toLowerCase()) || (p.nationality || '').toLowerCase().includes(autoSearch.toLowerCase()));
-    const filteredWithdrawn = withdrawnPlayers.filter(p => p.name.toLowerCase().includes(withdrawnSearch.toLowerCase()) || (p.nationality || '').toLowerCase().includes(withdrawnSearch.toLowerCase()));
+    const filteredRemaining = useMemo(() => remainingPlayers.filter(p => p.name.toLowerCase().includes(wcSearch.toLowerCase()) || (p.nationality || '').toLowerCase().includes(wcSearch.toLowerCase())), [remainingPlayers, wcSearch]);
+    const filteredAuto = useMemo(() => autoQualifiers.filter(p => p.name.toLowerCase().includes(autoSearch.toLowerCase()) || (p.nationality || '').toLowerCase().includes(autoSearch.toLowerCase())), [autoQualifiers, autoSearch]);
+    const filteredWithdrawn = useMemo(() => withdrawnPlayers.filter(p => p.name.toLowerCase().includes(withdrawnSearch.toLowerCase()) || (p.nationality || '').toLowerCase().includes(withdrawnSearch.toLowerCase())), [withdrawnPlayers, withdrawnSearch]);
 
     const handleCreateOrUpdate = async () => {
         setErrorMsg('');

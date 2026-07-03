@@ -152,17 +152,24 @@ export default function App() {
         return () => { unsubP(); unsubT(); };
     }, [user, db]);
 
+    // THE HASH ENGINE: This string ONLY changes when a tournament officially completes
+    const completedHash = useMemo(() => {
+        return tournaments.filter(t => t.status === 'completed').map(t => t.id + (t.completedAt || 0)).join('|');
+    }, [tournaments]);
+
     const players = useMemo(() => {
         const ranked = calculatePlayerRankings(playersRaw, tournaments);
         let activeIdx = 1;
         ranked.forEach(p => { if (!p.retired) { p.currentRank = activeIdx++; } });
         return ranked;
-    }, [playersRaw, tournaments]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [playersRaw, completedHash]);
 
     const globalHistory = useMemo(() => {
         if (!playersRaw.length || !tournaments.length) return [];
         return getGlobalHistory(playersRaw, tournaments);
-    }, [playersRaw, tournaments]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [playersRaw, completedHash]);
     
     const handleNavigate = (tab, playerId = null, tournamentId = null, nationCode = null) => {
         // RECORD SCROLL: Save the exact pixel depth before destroying the view
