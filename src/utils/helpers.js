@@ -629,9 +629,12 @@ export const generateNationsDraw = (teamsList) => {
     };
 
     const makeGroupTies = (g, name) => [
-        makeGroupTie(g[0], g[1], `${name}-1`, name), makeGroupTie(g[2], g[3], `${name}-2`, name),
+        // Matchday 1: 1 vs 4, 2 vs 3
+        makeGroupTie(g[0], g[3], `${name}-1`, name), makeGroupTie(g[1], g[2], `${name}-2`, name),
+        // Matchday 2: 1 vs 3, 2 vs 4
         makeGroupTie(g[0], g[2], `${name}-3`, name), makeGroupTie(g[1], g[3], `${name}-4`, name),
-        makeGroupTie(g[0], g[3], `${name}-5`, name), makeGroupTie(g[1], g[2], `${name}-6`, name)
+        // Matchday 3 (The Finale): 1 vs 2, 3 vs 4
+        makeGroupTie(g[0], g[1], `${name}-5`, name), makeGroupTie(g[2], g[3], `${name}-6`, name)
     ];
 
     const emptyKnockoutTie = (idPrefix) => ({ id: idPrefix, group: 'knockout', t1: null, t2: null, winner: null, score: null, type: null, matches: [] });

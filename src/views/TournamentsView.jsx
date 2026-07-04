@@ -191,28 +191,79 @@ export function CreateTournamentView({ players, onBack, onSuccess, db, appId, ed
     useEffect(() => {
         if (!editingId && tier === 'nations_league' && players.length >= 4) {
             setTeams(prev => {
-                const isPristine = prev.every(t => t.name.startsWith('Entry ') && t.flags.length === 0);
-                if (!isPristine) return prev;
-                
                 const active = players.filter(p => !p.retired).sort((a,b) => a.rank - b.rank);
                 const byNat = {};
                 active.forEach(p => { if(!byNat[p.nationality]) byNat[p.nationality] = []; byNat[p.nationality].push(p); });
 
-                // BALANCED NATION EVALUATION: Sort using the entire active national point contribution pool
-                const valid = Object.entries(byNat).filter(([k,v]) => v.length >= 5).sort((a,b) => {
+                // Calculate absolute mathematical points for all eligible nations
+                let validNations = Object.entries(byNat).filter(([k,v]) => v.length >= 5).sort((a,b) => {
                     const ptsA = a[1].reduce((sum, p) => sum + (p.points||0), 0);
                     const ptsB = b[1].reduce((sum, p) => sum + (p.points||0), 0);
                     return ptsB - ptsA;
-                }).slice(0, 4);
-                
-                const newTeams = [...prev];
-                valid.forEach((nat, i) => {
-                    newTeams[i] = { id: `team-${i}`, name: getCountryName(nat[0]), flags: [nat[0]], players: nat[1].slice(0,5).map(p=>p.id) };
                 });
-                return newTeams;
+
+                const isPristine = prev.every(t => t.name.startsWith('Entry ') && t.flags.length === 0);
+
+                if (isPristine) {
+                    // Initial Load: Build the top 16, forcing Host to Seed 1
+                    const hostIdx = validNations.findIndex(([code]) => code === hostCountry);
+                    let finalSeedList = [];
+                    if (hostIdx !== -1) {
+                        const hostTeamData = validNations.splice(hostIdx, 1)[0];
+                        finalSeedList = [hostTeamData, ...validNations].slice(0, 16);
+                    } else {
+                        finalSeedList = validNations.slice(0, 16);
+                    }
+                    
+                    const newTeams = [...prev];
+                    finalSeedList.forEach((nat, i) => {
+                        newTeams[i] = { id: `team-${i}`, name: getCountryName(nat[0]), flags: [nat[0]], players: nat[1].slice(0,5).map(p=>p.id) };
+                    });
+                    return newTeams;
+                }
+
+                // DYNAMIC HOST SHIFT: Mathematically re-sort the existing active teams to preserve strict point order
+                let currentTeams = [...prev];
+                const hasHost = currentTeams.some(t => t.flags.includes(hostCountry));
+                
+                if (!hasHost) {
+                    // Inject host if they aren't even on the board
+                    const hostData = validNations.find(([code]) => code === hostCountry);
+                    if (hostData) {
+                        const newHostTeam = { id: 'temp', name: getCountryName(hostCountry), flags: [hostCountry], players: hostData[1].slice(0,5).map(p=>p.id) };
+                        currentTeams.pop(); 
+                        currentTeams.push(newHostTeam); 
+                    }
+                }
+
+                // Map absolute rankings
+                const rankMap = {};
+                validNations.forEach((n, i) => rankMap[n[0]] = i);
+
+                // Perform the strict sorting
+                currentTeams.sort((a, b) => {
+                    const flagA = a.flags[0];
+                    const flagB = b.flags[0];
+                    
+                    // Push empty teams to the bottom
+                    if (!flagA && !flagB) return 0;
+                    if (!flagA) return 1;
+                    if (!flagB) return -1;
+
+                    // Force Host to the top
+                    if (flagA === hostCountry) return -1;
+                    if (flagB === hostCountry) return 1;
+
+                    // Order everyone else by strict points-based ranking
+                    const rankA = rankMap[flagA] ?? 999;
+                    const rankB = rankMap[flagB] ?? 999;
+                    return rankA - rankB;
+                });
+
+                return currentTeams.map((t, i) => ({ ...t, id: `team-${i}` }));
             });
         }
-    }, [tier, players, editingId]);
+    }, [tier, players, editingId, hostCountry]);
 
     const getUsedPlayerIds = () => teams.flatMap(t => t.players).filter(Boolean);
     
@@ -2039,7 +2090,25 @@ export function SNBInternationalsBracket({ tournament, allTournaments = [], play
 
 export function ResolveTeamSubMatchModal({ resolvingMatch, resolvingTie, setResolvingMatch, submitResult, players, tierConf, onNavigate }) {
     const [imgIdxMap, setImgIdxMap] = useState({});
-    useEffect(() => { setImgIdxMap({}); }, [resolvingMatch]);
+    const [roleMap, setRoleMap] = useState({});
+
+    useEffect(() => { 
+        setImgIdxMap({}); 
+        if (resolvingMatch) {
+            const pool = ["Missionary", "Prone Bone", "Lotus"];
+            const newRoleMap = {};
+            
+            const assignRoles = (pIds) => {
+                if (!Array.isArray(pIds)) return;
+                const shuffled = [...pool].sort(() => Math.random() - 0.5);
+                pIds.forEach((id, i) => { newRoleMap[id] = shuffled[i]; });
+            };
+            
+            assignRoles(resolvingMatch.p1);
+            assignRoles(resolvingMatch.p2);
+            setRoleMap(newRoleMap);
+        }
+    }, [resolvingMatch]);
 
     if (!resolvingMatch || !resolvingTie) return null;
 
@@ -2075,9 +2144,13 @@ export function ResolveTeamSubMatchModal({ resolvingMatch, resolvingTie, setReso
                     const p = getPlayer(pid);
                     const imgs = p.images?.length ? p.images : [p.imageUrl];
                     const iIdx = imgIdxMap[pid] || 0;
+                    const posLabel = roleMap[pid] || "Player";
                     
                     return (
                         <div key={idx} className="w-[180px] lg:w-[240px] xl:w-[300px] flex flex-col relative z-10 group">
+                            <div className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-white/60 mb-2 text-center bg-white/5 border border-white/10 px-3 py-1.5 rounded-full shadow-inner backdrop-blur-md">
+                                {posLabel}
+                            </div>
                             <div className="w-full aspect-[3/4] rounded-[1.5rem] overflow-hidden border-[3px] border-white/10 shadow-[0_15px_40px_rgba(0,0,0,0.4)] relative bg-black/40 flex items-center justify-center mb-3 shrink-0 isolate" style={{ WebkitMaskImage: '-webkit-radial-gradient(white, black)' }}>
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none -z-10"></div>
                                 {imgs[iIdx] ? (
@@ -2591,7 +2664,7 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
                     <div className="flex flex-col gap-2 w-full mb-6 animate-in slide-in-from-top-4 fade-in duration-500 delay-100">
                         {(() => {
                             let rankedIds = [];
-                            let unrankedIds = teams.map(t => t.id);
+                            let qfLosers = [];
 
                             if (knockout[2]?.[1]?.winner) {
                                 const champ = knockout[2][1].winner;
@@ -2607,95 +2680,91 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
                                     knockout[0].forEach(tie => {
                                         if (tie && tie.winner) {
                                             const loser = tie.winner === tie.t1.id ? tie.t2.id : tie.t1.id;
-                                            if (loser && !rankedIds.includes(loser)) rankedIds.push(loser);
+                                            if (loser) qfLosers.push(loser);
                                         }
                                     });
                                 }
                             }
 
-                            unrankedIds = unrankedIds.filter(id => !rankedIds.includes(id));
-                            const orderedTeams = [...rankedIds, ...unrankedIds].map(id => getTeam(id)).filter(Boolean);
+                            // Power Ranking Tiebreaker Engine
+                            const allGroupStandings = [
+                                ...standingsA.map(s => ({ ...s, groupRank: standingsA.findIndex(x => x.id === s.id) + 1 })),
+                                ...standingsB.map(s => ({ ...s, groupRank: standingsB.findIndex(x => x.id === s.id) + 1 })),
+                                ...standingsC.map(s => ({ ...s, groupRank: standingsC.findIndex(x => x.id === s.id) + 1 })),
+                                ...standingsD.map(s => ({ ...s, groupRank: standingsD.findIndex(x => x.id === s.id) + 1 }))
+                            ];
+
+                            const compareGroupStats = (idA, idB) => {
+                                const teamA = allGroupStandings.find(s => s.id === idA);
+                                const teamB = allGroupStandings.find(s => s.id === idB);
+                                if (!teamA || !teamB) return 0;
+                                if (teamA.groupRank !== teamB.groupRank) return teamA.groupRank - teamB.groupRank;
+                                if (teamA.wins !== teamB.wins) return teamB.wins - teamA.wins;
+                                if (teamA.matchWins !== teamB.matchWins) return teamB.matchWins - teamA.matchWins;
+                                return 0;
+                            };
+
+                            qfLosers.sort(compareGroupStats);
+
+                            const allTeamIds = teams.map(t => t.id);
+                            const groupEliminated = allTeamIds.filter(id => !rankedIds.includes(id) && !qfLosers.includes(id));
+                            groupEliminated.sort(compareGroupStats);
+
+                            const orderedTeamIds = [...rankedIds, ...qfLosers, ...groupEliminated];
+                            const orderedTeams = orderedTeamIds.map(id => getTeam(id)).filter(Boolean);
                             const visibleTeams = showAllNations ? orderedTeams : orderedTeams.slice(0, 4);
 
-                            return visibleTeams.map((team, index) => {
+                            const renderCompactTeamRow = (team, role, isChamp = false, index = 0) => {
+                                if (!team) return null;
                                 const rank = index + 1;
-                                const isChamp = knockout[2]?.[1]?.winner && rank === 1;
+                                const flagDisplay = team.flags && team.flags.length > 0 ? getFlag(team.flags[0]) : getFlag('UNK');
                                 
-                                let rankNode;
-                                if (isChamp) rankNode = <div className="w-8 h-8 rounded-lg bg-gold-500 text-black font-black flex items-center justify-center text-sm shadow-[0_0_10px_rgba(212,175,55,0.5)] shrink-0">1</div>;
-                                else if (knockout[2]?.[1]?.winner && rank === 2) rankNode = <div className="w-8 h-8 rounded-lg bg-slate-300 text-black font-black flex items-center justify-center text-sm shadow-[0_0_10px_rgba(203,213,225,0.5)] shrink-0">2</div>;
-                                else if (knockout[2]?.[0]?.winner && rank === 3) rankNode = <div className="w-8 h-8 rounded-lg bg-[#cd7f32] text-black font-black flex items-center justify-center text-sm shadow-[0_0_10px_rgba(205,127,50,0.5)] shrink-0">3</div>;
-                                else rankNode = <div className="w-8 h-8 rounded-lg bg-white/10 text-white/50 font-black flex items-center justify-center text-sm border border-white/10 shrink-0">{rank}</div>;
+                                let roleBadge;
+                                if (isChamp) roleBadge = <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-gold-500 text-black">Champion</span>;
+                                else if (role === 'Finalist') roleBadge = <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-slate-300 text-black">Finalist</span>;
+                                else if (role === 'Third') roleBadge = <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-[#cd7f32] text-black">Third Place</span>;
+                                else if (role === 'Fourth') roleBadge = <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-white/10 text-white/50 border border-white/10">Fourth Place</span>;
+                                else roleBadge = <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-white/5 text-white/40 border border-white/5">#{rank} Overall</span>;
 
                                 return (
-                                    /* FIX 1: Removed 'overflow-hidden' from this container.
-                                    FIX 2: Added 'isolation-auto' to ensure tooltips can float above everything.
-                                    */
-                                    <div key={team.id} className={`relative flex items-center justify-between p-2.5 sm:p-3 rounded-xl border transition-all ${isChamp ? 'bg-gradient-to-r from-[#2a220a]/95 to-[#0a0a0a]/95 backdrop-blur-xl border-gold-500/40 shadow-[0_4px_15px_rgba(212,175,55,0.25)] z-10' : 'bg-[#0a0a0a]/85 backdrop-blur-xl border-white/10 shadow-sm hover:bg-[#111111]/95'}`}>
-
-                                        <div className="flex items-center gap-3 sm:gap-4 pr-3 relative z-10">
-                                            {rankNode}
-                                            
-                                            <div className="flex items-center gap-1 shrink-0">
-                                                {team.flags && team.flags.length > 0 ? (
-                                                    team.flags.map((f, i) => (
-                                                        <div key={i} className="flex items-center justify-center h-8 bg-black/60 border border-white/15 rounded-md px-2 shadow-inner shrink-0 overflow-hidden">
-                                                            <span className="text-[26px] leading-none drop-shadow-md pb-[1px]">{getFlag(f)}</span>
-                                                        </div>
-                                                    ))
-                                                ) : (
-                                                    <div className="flex items-center justify-center h-8 bg-black/60 border border-white/15 rounded-md px-2 shadow-inner shrink-0 overflow-hidden">
-                                                        <span className="text-[26px] leading-none drop-shadow-md pb-[1px]">{getFlag('UNK')}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            
-                                            <span 
-                                                onClick={(e) => { 
-                                                    e.stopPropagation(); 
-                                                    if (onNavigate && team.flags && team.flags.length > 0) {
-                                                        onNavigate('nations', null, null, team.flags[0]);
-                                                    }
-                                                }} 
-                                                className={`font-bold tracking-wide truncate cursor-pointer hover:underline transition-opacity ${isChamp ? 'text-gold-400 text-lg sm:text-xl' : 'text-white text-lg sm:text-xl'}`}
-                                            >
-                                                {team.name}
-                                            </span>
+                                    <div key={team.id} onClick={() => { if (team.flags?.[0]) onNavigate('nations', null, null, team.flags[0]); }} className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition-all hover:scale-[1.02] ${isChamp ? 'bg-gradient-to-r from-gold-500/20 to-white/5 border border-gold-500/40 shadow-md' : 'bg-white/5 border border-white/10 hover:bg-white/10'}`}>
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-6 text-center font-black text-[10px] shrink-0 ${isChamp ? 'text-gold-400' : 'text-white/30'}`}>{rank}</div>
+                                            <div className="text-xl drop-shadow-sm leading-none shrink-0">{flagDisplay}</div>
+                                            <h3 className={`font-black truncate max-w-[120px] sm:max-w-[180px] ${isChamp ? 'text-sm text-gold-400' : 'text-xs text-white'}`}>{team.name}</h3>
                                         </div>
-                                        
-                                        {/* FIX 3: Removed 'overflow-hidden' from the avatar wrapper.
-                                        FIX 4: Added 'z-30' to ensure tooltips render on top of the map layer.
-                                        */}
-                                        <div className="flex items-center shrink-0 pr-1 relative z-30">
-                                            <div className="flex -space-x-3 sm:-space-x-4">
+                                        <div className="pl-2 shrink-0 flex items-center gap-3">
+                                            <div className="hidden sm:flex -space-x-2">
                                                 {team.players.map(pid => {
                                                     const p = getPlayer(pid);
                                                     return (
-                                                        /* FIX 5: Explicitly set z-index hierarchy and added 'group' 
-                                                        to trigger visibility correctly.
-                                                        */
-                                                        <div key={pid} onClick={() => onNavigate('players', pid)} className="relative group cursor-pointer hover:z-50 transition-all duration-200">
-                                                            <img 
-                                                                referrerPolicy="no-referrer" 
-                                                                src={p.images?.[0] || p.imageUrl || "https://via.placeholder.com/40"} 
-                                                                className="w-9 h-9 sm:w-11 sm:h-11 rounded-full object-cover border-[2px] border-[#0a0a0a] shadow-sm bg-black/50 group-hover:scale-110 group-hover:border-white/40 transition-transform" 
-                                                            />
-                                                            {/* FIX 6: Changed 'bottom-full' to a higher 'mb-3' 
-                                                            Added 'pointer-events-none' to ensure smooth mouse movement.
-                                                            */}
-                                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover:block bg-white text-black text-[11px] font-black px-2.5 py-1.5 rounded-lg whitespace-nowrap shadow-[0_10px_20px_rgba(0,0,0,0.5)] z-[60] pointer-events-none animate-in fade-in zoom-in-90 duration-150 border border-black/10">
-                                                                {p.name}
-                                                                {/* Arrow tail for the tooltip */}
-                                                                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-white"></div>
-                                                            </div>
-                                                        </div>
+                                                        <img key={pid} src={p.images?.[0] || p.imageUrl || "https://via.placeholder.com/40"} referrerPolicy="no-referrer" 
+                                                             className={`w-6 h-6 rounded-full object-cover border-[1.5px] shadow-sm ${isChamp ? 'border-gold-500/50' : 'border-[#0a0a0a]'}`} 
+                                                             title={p.name} />
                                                     );
                                                 })}
                                             </div>
+                                            {roleBadge}
                                         </div>
                                     </div>
                                 );
-                            });
+                            };
+
+                            return (
+                                <div className="space-y-2">
+                                    {visibleTeams.map((team, index) => {
+                                        const rank = index + 1;
+                                        let role = '';
+                                        let isChamp = false;
+                                        if (knockout[2]?.[1]?.winner && rank === 1) { role = 'Champion'; isChamp = true; }
+                                        else if (knockout[2]?.[1]?.winner && rank === 2) role = 'Finalist';
+                                        else if (knockout[2]?.[0]?.winner && rank === 3) role = 'Third';
+                                        else if (knockout[2]?.[0]?.winner && rank === 4) role = 'Fourth';
+                                        
+                                        return renderCompactTeamRow(team, role, isChamp, index);
+                                    })}
+                                </div>
+                            );
                         })()}
                     </div>
 
@@ -2707,16 +2776,15 @@ export function SNBNationsBracket({ tournament, allTournaments = [], players, on
                     )}
 
                     {/* Match Stats */}
-                    <div className="w-full flex justify-between items-center bg-[#0a0a0a]/90 backdrop-blur-xl border border-white/10 p-3 sm:p-4 rounded-xl shadow-lg mb-8">
-                        <div className="text-center px-2 flex-1"><div className="text-white/40 text-[9px] font-black uppercase tracking-widest mb-1">Matches</div><div className="text-white font-black text-sm">{tStats.total}</div></div>
-                        <div className="w-px h-8 bg-white/10"></div>
-                        <div className="text-center px-2 flex-1"><div className="text-emerald-400/60 text-[9px] font-black uppercase tracking-widest mb-1">Close</div><div className="text-emerald-400 font-black text-sm">{tStats.close}</div></div>
-                        <div className="w-px h-8 bg-white/10"></div>
-                        <div className="text-center px-2 flex-1"><div className="text-sky-400/60 text-[9px] font-black uppercase tracking-widest mb-1">Dominant</div><div className="text-sky-400 font-black text-sm">{tStats.dom}</div></div>
-                        <div className="w-px h-8 bg-white/10"></div>
-                        <div className="text-center px-2 flex-1"><div className="text-purple-400/60 text-[9px] font-black uppercase tracking-widest mb-1">Auto</div><div className="text-purple-400 font-black text-sm">{tStats.luck}</div></div>
+                    <div className="flex justify-between items-center bg-white/5 border border-white/10 p-2.5 rounded-xl mb-8">
+                        <div className="text-center px-2"><div className="text-white/40 text-[8px] font-black uppercase tracking-widest">Matches</div><div className="text-white font-bold text-xs">{tStats.total}</div></div>
+                        <div className="w-px h-6 bg-white/10"></div>
+                        <div className="text-center px-2"><div className="text-[#34d399]/60 text-[8px] font-black uppercase tracking-widest">Close</div><div className="text-[#34d399] font-bold text-xs">{tStats.close}</div></div>
+                        <div className="w-px h-6 bg-white/10"></div>
+                        <div className="text-center px-2"><div className="text-[#60a5fa]/60 text-[8px] font-black uppercase tracking-widest">Dominant</div><div className="text-[#60a5fa] font-bold text-xs">{tStats.dom}</div></div>
+                        <div className="w-px h-6 bg-white/10"></div>
+                        <div className="text-center px-2"><div className="text-[#a78bfa]/60 text-[8px] font-black uppercase tracking-widest">Auto</div><div className="text-[#a78bfa] font-bold text-xs">{tStats.luck}</div></div>
                     </div>
-
                 </div>
             ) : (
                 <div className="relative w-full flex-1 flex flex-col">
